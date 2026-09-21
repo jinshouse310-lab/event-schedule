@@ -33,6 +33,8 @@ input:focus, select:focus, textarea:focus { outline: 2px solid rgba(31,111,95,.3
 .btn.primary:hover { background: var(--primary-dark); }
 .btn.danger { color: var(--danger); border-color: var(--danger); }
 .btn.small { padding: .2rem .5rem; font-size: .85rem; }
+.edit-btn { margin-top: .2rem; }
+.event-card .edit-btn:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
 .icon-btn { border: 0; background: transparent; font-size: 1.5rem; line-height: 1; cursor: pointer; color: var(--muted); }
 
 #main { max-width: 1200px; margin: 0 auto; padding: 1rem; }

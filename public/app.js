@@ -13,6 +13,7 @@
     calMonth: null, // {y, m}
     detailId: null,
     editingEvent: null,
+    editFrom: null, // 'detail' when the form was opened from the detail dialog
     config: { maxUploadMb: 50, authRequired: false },
   };
   const TZ_LABEL = { 'Asia/Tokyo': 'JST', 'Asia/Kolkata': 'IST' };
@@ -226,6 +227,7 @@
         <div class="ev-right">
           <div>${esc(t('owner'))}: ${ownerHtml(ev)}</div>
           <div>📎 ${esc(t('count_materials')(ev.materials_count ?? (ev.materials || []).length))}</div>
+          <button class="btn small edit-btn" data-edit="${ev.id}" title="${esc(t('edit'))}">✎ ${esc(t('edit'))}</button>
         </div>
       </div>`;
   }
@@ -353,8 +355,9 @@
   }
 
   // ---------- event form ----------
-  function openEventForm(ev) {
+  function openEventForm(ev, from = null) {
     state.editingEvent = ev || null;
+    state.editFrom = from;
     const f = $('#eventForm');
     f.reset();
     $('#eventFormTitle').textContent = t(ev ? 'edit_event_title' : 'new_event_title');
@@ -415,7 +418,7 @@
       $('#eventModal').hidden = true;
       toast(t('saved'));
       await refreshAll();
-      if (state.editingEvent) openDetail(saved.id);
+      if (state.editingEvent && state.editFrom === 'detail') openDetail(saved.id);
     } catch (err) { toast(errMsg(err), true); }
   }
 
@@ -496,7 +499,11 @@
     });
     $('#btnNewEvent').addEventListener('click', () => openEventForm(null));
     ['#fSearch', '#fType', '#fSide', '#fOwner', '#fRange', '#fStatus'].forEach((s) => $(s).addEventListener('input', renderList));
-    $('#eventList').addEventListener('click', (e) => { const c = e.target.closest('.event-card'); if (c) openDetail(c.dataset.id); });
+    $('#eventList').addEventListener('click', async (e) => {
+      const editBtn = e.target.closest('[data-edit]');
+      if (editBtn) { e.stopPropagation(); openEventForm(await api(`/api/events/${editBtn.dataset.edit}`)); return; }
+      const c = e.target.closest('.event-card'); if (c) openDetail(c.dataset.id);
+    });
     $('#calGrid').addEventListener('click', (e) => { const c = e.target.closest('.cal-ev'); if (c) openDetail(c.dataset.id); });
     $('#calPrev').addEventListener('click', () => { const c = state.calMonth; state.calMonth = c.m === 1 ? { y: c.y - 1, m: 12 } : { y: c.y, m: c.m - 1 }; renderCalendar(); });
     $('#calNext').addEventListener('click', () => { const c = state.calMonth; state.calMonth = c.m === 12 ? { y: c.y + 1, m: 1 } : { y: c.y, m: c.m + 1 }; renderCalendar(); });
@@ -509,7 +516,7 @@
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $$('.modal').forEach((m) => (m.hidden = true)); });
 
     // detail actions
-    $('#btnEditEvent').addEventListener('click', async () => { const ev = await api(`/api/events/${state.detailId}`); $('#detailModal').hidden = true; openEventForm(ev); });
+    $('#btnEditEvent').addEventListener('click', async () => { const ev = await api(`/api/events/${state.detailId}`); $('#detailModal').hidden = true; openEventForm(ev, 'detail'); });
     $('#btnDeleteEvent').addEventListener('click', async () => {
       if (!confirm(t('confirm_delete_event'))) return;
       try { await api(`/api/events/${state.detailId}`, { method: 'DELETE' }); $('#detailModal').hidden = true; toast(t('deleted')); await refreshAll(false); }
