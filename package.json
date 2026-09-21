@@ -1,0 +1,19 @@
+{
+  "name": "biogas-event-schedule",
+  "version": "0.1.0",
+  "description": "バイオガス事業本部 主要イベント共有アプリ / Biogas Division shared event schedule",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node --no-warnings=ExperimentalWarning server.js",
+    "dev": "node --no-warnings=ExperimentalWarning --watch server.js",
+    "test": "node --no-warnings=ExperimentalWarning --test \"test/**/*.test.js\""
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "multer": "^2.0.2"
+  }
+}

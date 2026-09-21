@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ログイン / Login - Biogas Events</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="login-body">
+  <main class="login-card">
+    <h1>バイオガス事業本部<br /><span class="sub">Biogas Division Event Schedule</span></h1>
+    <p>共有パスコードを入力してください / Enter the shared passcode</p>
+    <form id="loginForm">
+      <input type="password" id="passcode" name="passcode" autocomplete="current-password" placeholder="Passcode" required autofocus />
+      <button type="submit" class="btn primary">ログイン / Login</button>
+      <p id="err" class="error" hidden>パスコードが違います / Wrong passcode</p>
+    </form>
+  </main>
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const passcode = document.getElementById('passcode').value;
+      const r = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ passcode }) });
+      if (r.ok) location.href = '/'; else document.getElementById('err').hidden = false;
+    });
+  </script>
+</body>
+</html>

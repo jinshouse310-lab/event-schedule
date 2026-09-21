@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Biogas Division Events</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">⚡</span>
+      <div>
+        <div class="brand-title" data-i18n="app_title">バイオガス事業本部 イベントスケジュール</div>
+        <div class="brand-sub" data-i18n="app_sub">Japan × India shared calendar</div>
+      </div>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-view="list" data-i18n="nav_list">一覧</button>
+      <button class="tab" data-view="calendar" data-i18n="nav_calendar">カレンダー</button>
+      <button class="tab" data-view="members" data-i18n="nav_members">メンバー</button>
+      <button class="tab" data-view="settings" data-i18n="nav_settings">設定</button>
+    </nav>
+    <div class="topbar-actions">
+      <div class="seg" id="tzToggle" title="Display timezone">
+        <button data-tz="Asia/Tokyo" class="active">JST</button>
+        <button data-tz="Asia/Kolkata">IST</button>
+      </div>
+      <div class="seg" id="langToggle" title="Language">
+        <button data-lang="ja" class="active">日本語</button>
+        <button data-lang="en">EN</button>
+      </div>
+      <button class="btn primary" id="btnNewEvent" data-i18n="new_event">＋ イベント追加</button>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- LIST VIEW -->
+    <section id="view-list" class="view">
+      <div class="filters">
+        <input type="search" id="fSearch" data-i18n-placeholder="search_placeholder" placeholder="検索..." />
+        <select id="fType"><option value="" data-i18n="all_types">すべての種類</option></select>
+        <select id="fSide">
+          <option value="" data-i18n="all_sides">日本・インド</option>
+          <option value="JP" data-i18n="side_jp">日本側</option>
+          <option value="IN" data-i18n="side_in">インド側</option>
+        </select>
+        <select id="fOwner"><option value="" data-i18n="all_owners">すべての主担当</option></select>
+        <select id="fRange">
+          <option value="upcoming" data-i18n="range_upcoming">今後の予定</option>
+          <option value="month" data-i18n="range_month">今月</option>
+          <option value="next3" data-i18n="range_next3">今後3か月</option>
+          <option value="past" data-i18n="range_past">過去の予定</option>
+          <option value="all" data-i18n="range_all">すべて</option>
+        </select>
+        <select id="fStatus">
+          <option value="" data-i18n="all_status">すべての状態</option>
+          <option value="planned" data-i18n="status_planned">予定</option>
+          <option value="confirmed" data-i18n="status_confirmed">確定</option>
+          <option value="done" data-i18n="status_done">完了</option>
+          <option value="cancelled" data-i18n="status_cancelled">中止</option>
+        </select>
+      </div>
+      <div id="eventList" class="event-list"></div>
+    </section>
+
+    <!-- CALENDAR VIEW -->
+    <section id="view-calendar" class="view" hidden>
+      <div class="cal-header">
+        <button class="btn" id="calPrev">‹</button>
+        <h2 id="calTitle"></h2>
+        <button class="btn" id="calNext">›</button>
+        <button class="btn" id="calToday" data-i18n="today">今日</button>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+    </section>
+
+    <!-- MEMBERS VIEW -->
+    <section id="view-members" class="view" hidden>
+      <div class="section-head">
+        <h2 data-i18n="members_title">メンバー</h2>
+        <button class="btn primary" id="btnNewMember" data-i18n="add_member">＋ メンバー追加</button>
+      </div>
+      <div class="two-col">
+        <div>
+          <h3 data-i18n="side_jp">日本側</h3>
+          <table class="table" id="membersJP"></table>
+        </div>
+        <div>
+          <h3 data-i18n="side_in">インド側</h3>
+          <table class="table" id="membersIN"></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS VIEW -->
+    <section id="view-settings" class="view" hidden>
+      <div class="section-head">
+        <h2 data-i18n="types_title">イベントの種類</h2>
+        <button class="btn primary" id="btnNewType" data-i18n="add_type">＋ 種類を追加</button>
+      </div>
+      <table class="table" id="typesTable"></table>
+
+      <h2 data-i18n="ics_title">カレンダー連携 (Outlook / Google カレンダー)</h2>
+      <p data-i18n="ics_help">以下の URL を「カレンダーの購読」に登録すると、各自のカレンダーに自動で同期されます。</p>
+      <div class="ics-box">
+        <code id="icsUrlJa"></code>
+        <code id="icsUrlEn"></code>
+      </div>
+      <div id="logoutBox" hidden>
+        <h2 data-i18n="session_title">セッション</h2>
+        <button class="btn" id="btnLogout" data-i18n="logout">ログアウト</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- EVENT DETAIL -->
+  <div class="modal" id="detailModal" hidden>
+    <div class="modal-card wide">
+      <div class="modal-head">
+        <span class="type-badge" id="dType"></span>
+        <h2 id="dTitle"></h2>
+        <button class="icon-btn" data-close>&times;</button>
+      </div>
+      <div class="detail-grid">
+        <div>
+          <dl class="kv">
+            <dt data-i18n="when">日時</dt><dd id="dWhen"></dd>
+            <dt data-i18n="location">場所</dt><dd id="dLocation"></dd>
+            <dt data-i18n="owner">主担当</dt><dd id="dOwner"></dd>
+            <dt data-i18n="participants">関係メンバー</dt><dd id="dMembers"></dd>
+            <dt data-i18n="status">状態</dt><dd id="dStatus"></dd>
+          </dl>
+          <div class="desc" id="dDescription"></div>
+        </div>
+        <div class="materials">
+          <h3 data-i18n="materials">資料</h3>
+          <ul id="dMaterials" class="material-list"></ul>
+          <form id="uploadForm" class="material-form">
+            <label class="file-drop">
+              <input type="file" id="uploadFile" multiple />
+              <span data-i18n="upload_hint">ファイルを選択 / ドラッグ＆ドロップ</span>
+            </label>
+            <div id="uploadProgress" class="progress" hidden></div>
+          </form>
+          <form id="linkForm" class="material-form">
+            <input type="url" id="linkUrl" placeholder="https://..." required />
+            <input type="text" id="linkName" data-i18n-placeholder="link_name" placeholder="リンク名 (任意)" />
+            <button class="btn" type="submit" data-i18n="add_link">リンク追加</button>
+          </form>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn danger" id="btnDeleteEvent" data-i18n="delete">削除</button>
+        <span class="spacer"></span>
+        <button class="btn" data-close data-i18n="close">閉じる</button>
+        <button class="btn primary" id="btnEditEvent" data-i18n="edit">編集</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EVENT FORM -->
+  <div class="modal" id="eventModal" hidden>
+    <form class="modal-card wide" id="eventForm">
+      <div class="modal-head">
+        <h2 id="eventFormTitle" data-i18n="new_event_title">イベント追加</h2>
+        <button type="button" class="icon-btn" data-close>&times;</button>
+      </div>
+      <div class="form-grid">
+        <label class="span2"><span data-i18n="title_ja">タイトル (日本語)</span><input name="title" required /></label>
+        <label class="span2"><span data-i18n="title_en">Title (English)</span><input name="title_en" /></label>
+        <label><span data-i18n="type">種類</span><select name="type_id" id="formType" required></select></label>
+        <label><span data-i18n="status">状態</span>
+          <select name="status">
+            <option value="planned" data-i18n="status_planned">予定</option>
+            <option value="confirmed" data-i18n="status_confirmed">確定</option>
+            <option value="done" data-i18n="status_done">完了</option>
+            <option value="cancelled" data-i18n="status_cancelled">中止</option>
+          </select>
+        </label>
+        <label class="check span2"><input type="checkbox" name="all_day" id="formAllDay" /><span data-i18n="all_day">終日</span></label>
+        <label><span data-i18n="start">開始</span>
+          <div class="dt"><input type="date" name="start_date" required /><input type="time" name="start_time" /></div>
+        </label>
+        <label><span data-i18n="end">終了</span>
+          <div class="dt"><input type="date" name="end_date" /><input type="time" name="end_time" /></div>
+        </label>
+        <label><span data-i18n="input_tz">入力タイムゾーン</span>
+          <select name="timezone">
+            <option value="Asia/Tokyo">JST (日本 / Japan)</option>
+            <option value="Asia/Kolkata">IST (インド / India)</option>
+          </select>
+        </label>
+        <label><span data-i18n="location">場所</span><input name="location" /></label>
+        <label><span data-i18n="owner">主担当</span><select name="owner_id" id="formOwner"></select></label>
+        <div class="span2">
+          <span class="label" data-i18n="participants">関係メンバー</span>
+          <div class="member-picker" id="formMembers"></div>
+        </div>
+        <label class="span2"><span data-i18n="description">メモ・詳細</span><textarea name="description" rows="4"></textarea></label>
+      </div>
+      <div class="modal-foot">
+        <span class="spacer"></span>
+        <button type="button" class="btn" data-close data-i18n="cancel">キャンセル</button>
+        <button type="submit" class="btn primary" data-i18n="save">保存</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- MEMBER FORM -->
+  <div class="modal" id="memberModal" hidden>
+    <form class="modal-card" id="memberForm">
+      <div class="modal-head">
+        <h2 id="memberFormTitle" data-i18n="add_member">メンバー追加</h2>
+        <button type="button" class="icon-btn" data-close>&times;</button>
+      </div>
+      <div class="form-grid">
+        <label><span data-i18n="name_ja">氏名 (日本語)</span><input name="name" required /></label>
+        <label><span data-i18n="name_en">Name (English)</span><input name="name_en" /></label>
+        <label><span data-i18n="side">所属</span>
+          <select name="side">
+            <option value="JP" data-i18n="side_jp">日本側</option>
+            <option value="IN" data-i18n="side_in">インド側</option>
+          </select>
+        </label>
+        <label><span data-i18n="role">役職</span><input name="role" /></label>
+        <label class="span2"><span>Email</span><input name="email" type="email" /></label>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn danger" id="btnDeactivateMember" hidden data-i18n="deactivate">無効化</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" data-close data-i18n="cancel">キャンセル</button>
+        <button type="submit" class="btn primary" data-i18n="save">保存</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- TYPE FORM -->
+  <div class="modal" id="typeModal" hidden>
+    <form class="modal-card" id="typeForm">
+      <div class="modal-head">
+        <h2 id="typeFormTitle" data-i18n="add_type">種類を追加</h2>
+        <button type="button" class="icon-btn" data-close>&times;</button>
+      </div>
+      <div class="form-grid">
+        <label><span data-i18n="label_ja">名称 (日本語)</span><input name="label_ja" required /></label>
+        <label><span data-i18n="label_en">Label (English)</span><input name="label_en" /></label>
+        <label><span data-i18n="color">色</span><input name="color" type="color" value="#5d6d7e" /></label>
+        <label><span data-i18n="sort_order">表示順</span><input name="sort_order" type="number" value="90" /></label>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn danger" id="btnDeactivateType" hidden data-i18n="deactivate">無効化</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" data-close data-i18n="cancel">キャンセル</button>
+        <button type="submit" class="btn primary" data-i18n="save">保存</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="/static/i18n.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
