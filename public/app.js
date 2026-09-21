@@ -215,7 +215,7 @@
         </div>
         <div class="ev-right">
           <div>${esc(t('owner'))}: ${sideBadge(ev.owner_side)} <b>${esc(ownerName(ev))}</b></div>
-          <div>📎 ${esc(t('count_materials')(ev.materials.length))}</div>
+          <div>📎 ${esc(t('count_materials')(ev.materials_count ?? (ev.materials || []).length))}</div>
         </div>
       </div>`;
   }
@@ -303,6 +303,7 @@
     $('#dDescription').textContent = ev.description || '';
     $('#dDescription').hidden = !ev.description;
     renderMaterials(ev.materials);
+    $('#uploadHint').textContent = `${t('upload_hint')} (≤ ${state.config.maxUploadMb} MB)`;
     $('#detailModal').hidden = false;
   }
   function renderMaterials(list) {
@@ -310,7 +311,7 @@
     if (!list.length) { ul.innerHTML = `<li class="m-meta">${esc(t('no_materials'))}</li>`; return; }
     ul.innerHTML = list.map((m) => `<li>
       <span>${m.kind === 'link' ? '🔗' : '📄'}</span>
-      <a class="m-name" href="${m.kind === 'link' ? esc(m.url) : `/api/materials/${m.id}/download`}" target="_blank" rel="noopener" title="${esc(m.name)}">${esc(m.name)}</a>
+      <a class="m-name" href="${m.kind === 'link' ? esc(m.url) : `/api/materials/${m.event_id}/${m.id}/download`}" target="_blank" rel="noopener" title="${esc(m.name)}">${esc(m.name)}</a>
       <span class="m-meta">${m.kind === 'file' ? fmtSize(m.size) + ' · ' : ''}${esc(m.created_at.slice(0, 10))}${m.uploaded_by ? ' · ' + esc(m.uploaded_by) : ''}</span>
       <button class="icon-btn" data-del-material="${m.id}" title="${esc(t('delete'))}">&times;</button>
     </li>`).join('');
@@ -360,7 +361,7 @@
         if (ev.end_at) { const e = zonedParts(new Date(ev.end_at), ev.timezone); f.end_date.value = dateKey(e); f.end_time.value = timeStr(e); }
       }
       const ids = new Set(ev.members.map((m) => m.id));
-      $$('input[name=member_ids]', f).forEach((cb) => (cb.checked = ids.has(Number(cb.value))));
+      $$('input[name=member_ids]', f).forEach((cb) => (cb.checked = ids.has(cb.value)));
     } else {
       f.timezone.value = state.tz;
       const p = zonedParts(new Date(), state.tz);
@@ -381,10 +382,10 @@
     const allDay = f.all_day.checked;
     const tz = f.timezone.value;
     const body = {
-      title: f.title.value, title_en: f.title_en.value, type_id: Number(f.type_id.value), status: f.status.value,
-      all_day: allDay, timezone: tz, location: f.location.value, owner_id: f.owner_id.value ? Number(f.owner_id.value) : null,
+      title: f.title.value, title_en: f.title_en.value, type_id: f.type_id.value, status: f.status.value,
+      all_day: allDay, timezone: tz, location: f.location.value, owner_id: f.owner_id.value || null,
       description: f.description.value,
-      member_ids: $$('input[name=member_ids]:checked', f).map((cb) => Number(cb.value)),
+      member_ids: $$('input[name=member_ids]:checked', f).map((cb) => cb.value),
     };
     if (allDay) {
       body.start_at = `${f.start_date.value}T00:00:00Z`;
@@ -482,8 +483,8 @@
     });
     $('#btnNewEvent').addEventListener('click', () => openEventForm(null));
     ['#fSearch', '#fType', '#fSide', '#fOwner', '#fRange', '#fStatus'].forEach((s) => $(s).addEventListener('input', renderList));
-    $('#eventList').addEventListener('click', (e) => { const c = e.target.closest('.event-card'); if (c) openDetail(Number(c.dataset.id)); });
-    $('#calGrid').addEventListener('click', (e) => { const c = e.target.closest('.cal-ev'); if (c) openDetail(Number(c.dataset.id)); });
+    $('#eventList').addEventListener('click', (e) => { const c = e.target.closest('.event-card'); if (c) openDetail(c.dataset.id); });
+    $('#calGrid').addEventListener('click', (e) => { const c = e.target.closest('.cal-ev'); if (c) openDetail(c.dataset.id); });
     $('#calPrev').addEventListener('click', () => { const c = state.calMonth; state.calMonth = c.m === 1 ? { y: c.y - 1, m: 12 } : { y: c.y, m: c.m - 1 }; renderCalendar(); });
     $('#calNext').addEventListener('click', () => { const c = state.calMonth; state.calMonth = c.m === 12 ? { y: c.y + 1, m: 1 } : { y: c.y, m: c.m + 1 }; renderCalendar(); });
     $('#calToday').addEventListener('click', () => { state.calMonth = null; renderCalendar(); });
@@ -504,7 +505,7 @@
     $('#dMaterials').addEventListener('click', async (e) => {
       const b = e.target.closest('[data-del-material]'); if (!b) return;
       if (!confirm(t('confirm_delete_material'))) return;
-      try { await api(`/api/materials/${b.dataset.delMaterial}`, { method: 'DELETE' }); toast(t('deleted')); await refreshDetailMaterials(); }
+      try { await api(`/api/materials/${state.detailId}/${b.dataset.delMaterial}`, { method: 'DELETE' }); toast(t('deleted')); await refreshDetailMaterials(); }
       catch (err) { toast(errMsg(err), true); }
     });
     $('#uploadFile').addEventListener('change', (e) => { uploadFiles([...e.target.files]); e.target.value = ''; });
@@ -527,7 +528,7 @@
     $('#memberForm').addEventListener('submit', submitMemberForm);
     $('#view-members').addEventListener('click', (e) => {
       const b = e.target.closest('[data-edit-member]'); if (!b) return;
-      openMemberForm($('#view-members')._all.find((m) => m.id === Number(b.dataset.editMember)));
+      openMemberForm($('#view-members')._all.find((m) => m.id === b.dataset.editMember));
     });
     $('#btnDeactivateMember').addEventListener('click', async () => {
       if (!confirm(t('confirm_deactivate'))) return;
@@ -538,7 +539,7 @@
     $('#typeForm').addEventListener('submit', submitTypeForm);
     $('#typesTable').addEventListener('click', (e) => {
       const b = e.target.closest('[data-edit-type]'); if (!b) return;
-      openTypeForm($('#typesTable')._all.find((x) => x.id === Number(b.dataset.editType)));
+      openTypeForm($('#typesTable')._all.find((x) => x.id === b.dataset.editType));
     });
     $('#btnDeactivateType').addEventListener('click', async () => {
       if (!confirm(t('confirm_deactivate'))) return;

@@ -8,4 +8,4 @@ RUN mkdir -p /app/data
 ENV PORT=3000 DATA_DIR=/app/data
 EXPOSE 3000
 VOLUME ["/app/data"]
-CMD ["node", "--no-warnings=ExperimentalWarning", "server.js"]
+CMD ["node", "server.mjs"]

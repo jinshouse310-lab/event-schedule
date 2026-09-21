@@ -4,7 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Biogas Division Events</title>
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%E2%9A%A1%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <header class="topbar">
@@ -139,7 +140,7 @@
           <form id="uploadForm" class="material-form">
             <label class="file-drop">
               <input type="file" id="uploadFile" multiple />
-              <span data-i18n="upload_hint">ファイルを選択 / ドラッグ＆ドロップ</span>
+              <span id="uploadHint">ファイルを選択 / ドラッグ＆ドロップ</span>
             </label>
             <div id="uploadProgress" class="progress" hidden></div>
           </form>
@@ -259,7 +260,7 @@
 
   <div id="toast" class="toast" hidden></div>
 
-  <script src="/static/i18n.js"></script>
-  <script src="/static/app.js"></script>
+  <script src="/i18n.js"></script>
+  <script src="/app.js"></script>
 </body>
 </html>

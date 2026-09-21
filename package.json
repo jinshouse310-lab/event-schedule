@@ -3,17 +3,18 @@
   "version": "0.1.0",
   "description": "バイオガス事業本部 主要イベント共有アプリ / Biogas Division shared event schedule",
   "private": true,
-  "main": "server.js",
+  "main": "server.mjs",
   "scripts": {
-    "start": "node --no-warnings=ExperimentalWarning server.js",
-    "dev": "node --no-warnings=ExperimentalWarning --watch server.js",
-    "test": "node --no-warnings=ExperimentalWarning --test \"test/**/*.test.js\""
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs",
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "netlify:dev": "netlify dev"
   },
   "engines": {
-    "node": ">=22.13"
+    "node": ">=20"
   },
   "dependencies": {
-    "express": "^5.1.0",
-    "multer": "^2.0.2"
-  }
+    "@netlify/blobs": "^11.1.0"
+  },
+  "type": "module"
 }
