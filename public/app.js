@@ -103,7 +103,8 @@
   };
   const ownerHtml = (ev) => `${sideBadge(ev.owner_side)} <b>${esc(ownerName(ev))}</b>${ev.owner_dept ? ` <span class="dept">${esc(ev.owner_dept)}</span>` : ''}`;
   const memberLabel = (m) => memberName(m) + (m.dept ? ` · ${m.dept}` : '');
-  const sideBadge = (side) => (side ? `<span class="side-badge ${side}">${side}</span>` : '');
+  // Japan-side members are the majority, so only India-side members get a small tag.
+  const sideBadge = (side) => (side === 'IN' ? `<span class="side-badge IN">IN</span>` : '');
   const fmtSize = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1048576).toFixed(1)} MB`);
   function toast(msg, isErr) {
     const el = $('#toast');

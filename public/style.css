@@ -77,8 +77,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid rgba(31,111,95,.3
 .allday-tag { display: inline-block; padding: 0 .5rem; border-radius: 4px; background: var(--bg); font-weight: 600; font-size: .85rem; }
 .ev-right { display: flex; flex-direction: column; gap: .3rem; align-items: flex-end; }
 .type-badge { display: inline-block; padding: .1rem .55rem; border-radius: 999px; color: #fff; font-size: .78rem; font-weight: 600; white-space: nowrap; }
-.side-badge { display: inline-block; padding: 0 .4rem; border-radius: 4px; font-size: .72rem; font-weight: 700; color: #fff; vertical-align: middle; }
-.side-badge.JP { background: var(--jp); } .side-badge.IN { background: var(--in); }
+.side-badge { display: inline-block; padding: 0 .35rem; border-radius: 4px; font-size: .68rem; font-weight: 600; vertical-align: middle; border: 1px solid var(--in); color: var(--in); background: #fff; }
 .status-badge { display: inline-block; padding: 0 .5rem; border-radius: 4px; font-size: .78rem; border: 1px solid var(--line); }
 .status-badge.confirmed { border-color: var(--primary); color: var(--primary); }
 .status-badge.done { background: #eee; }
