@@ -193,7 +193,7 @@
           </select>
         </label>
         <label><span data-i18n="location">場所</span><input name="location" /></label>
-        <label><span data-i18n="owner">主担当</span><select name="owner_id" id="formOwner"></select></label>
+        <label><span data-i18n="owner">主担当</span><select name="owner" id="formOwner"></select><small class="hint" data-i18n="owner_hint">人が未定なら所属 (日本側 / インド側) だけでも指定できます</small></label>
         <div class="span2">
           <span class="label" data-i18n="participants">関係メンバー</span>
           <div class="member-picker" id="formMembers"></div>
@@ -218,12 +218,13 @@
       <div class="form-grid">
         <label><span data-i18n="name_ja">氏名 (日本語)</span><input name="name" required /></label>
         <label><span data-i18n="name_en">Name (English)</span><input name="name_en" /></label>
-        <label><span data-i18n="side">所属</span>
+        <label><span data-i18n="side">拠点</span>
           <select name="side">
             <option value="JP" data-i18n="side_jp">日本側</option>
             <option value="IN" data-i18n="side_in">インド側</option>
           </select>
         </label>
+        <label><span data-i18n="dept">所属 (部署・会社)</span><input name="dept" /></label>
         <label><span data-i18n="role">役職</span><input name="role" /></label>
         <label class="span2"><span>Email</span><input name="email" type="email" /></label>
       </div>

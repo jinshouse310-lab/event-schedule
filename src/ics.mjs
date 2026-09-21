@@ -21,7 +21,8 @@ export function buildIcs(events, lang = 'ja') {
   for (const e of sorted) {
     const typeLabel = lang === 'en' ? e.type_label_en : e.type_label_ja;
     const title = lang === 'en' && e.title_en ? e.title_en : e.title;
-    const owner = lang === 'en' && e.owner_name_en ? e.owner_name_en : e.owner_name;
+    const sideLabel = { JP: lang === 'en' ? 'Japan side' : '日本側', IN: lang === 'en' ? 'India side' : 'インド側' };
+    const owner = e.owner_id ? (lang === 'en' && e.owner_name_en ? e.owner_name_en : e.owner_name) : sideLabel[e.owner_side] || '';
     lines.push('BEGIN:VEVENT', `UID:event-${e.id}@biogas-schedule`, `DTSTAMP:${icsDate(e.updated_at || e.created_at)}`);
     if (e.all_day) {
       const end = new Date(e.end_at || e.start_at);

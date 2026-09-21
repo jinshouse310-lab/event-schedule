@@ -42,7 +42,8 @@ test('default event types are seeded', async () => {
 });
 
 test('members: create JP and IN, soft delete hides from default list', async () => {
-  const jp = await call('POST', '/api/members', { name: '山田 太郎', name_en: 'Taro Yamada', side: 'JP' });
+  const jp = await call('POST', '/api/members', { name: '山田 太郎', name_en: 'Taro Yamada', side: 'JP', dept: '経営企画部' });
+  assert.equal(jp.body.dept, '経営企画部');
   const ind = await call('POST', '/api/members', { name: 'Priya Sharma', side: 'IN' });
   assert.equal(jp.status, 201); assert.equal(ind.status, 201);
   assert.equal((await call('POST', '/api/members', { name: '' })).status, 400);
@@ -64,6 +65,7 @@ test('events: create, validate, filter, update, delete', async () => {
   });
   assert.equal(created.status, 201);
   assert.equal(created.body.owner_name, '山田 太郎');
+  assert.equal(created.body.owner_side, 'JP'); assert.equal(created.body.owner_dept, '経営企画部');
   assert.equal(created.body.members.length, 1);
   assert.equal(created.body.type_label_en, 'Management Meeting');
 
@@ -72,6 +74,19 @@ test('events: create, validate, filter, update, delete', async () => {
   assert.equal((await call('POST', '/api/events', { type_id: mgmt.id, start_at: '2026-10-05T03:00:00Z' })).status, 400);
   assert.equal((await call('POST', '/api/events', { title: 'x', type_id: 'nope', start_at: '2026-10-05T03:00:00Z' })).body.error, 'invalid_type');
 
+  // Owner can be a side only (person not decided yet)
+  const sideOnly = await call('POST', '/api/events', { title: '来客', type_id: mgmt.id, start_at: '2026-10-06T01:00:00Z', owner_side: 'IN' });
+  assert.equal(sideOnly.status, 201); assert.equal(sideOnly.body.owner_id, null); assert.equal(sideOnly.body.owner_side, 'IN'); assert.equal(sideOnly.body.owner_name, null);
+  assert.equal((await call('GET', '/api/events?side=IN')).body.length, 2);
+  // Assigning a person overrides the side-only owner; clearing the person keeps the given side
+  const withPerson = await call('PUT', `/api/events/${sideOnly.body.id}`, { owner_id: jp.id, owner_side: 'IN' });
+  assert.equal(withPerson.body.owner_side, 'JP');
+  const cleared = await call('PUT', `/api/events/${sideOnly.body.id}`, { owner_id: null, owner_side: 'IN' });
+  assert.equal(cleared.body.owner_id, null); assert.equal(cleared.body.owner_side, 'IN');
+  assert.equal((await call('POST', '/api/events', { title: 'x', type_id: mgmt.id, start_at: '2026-10-06T01:00:00Z', owner_side: 'XX' })).body.owner_side, null);
+  await call('DELETE', `/api/events/${sideOnly.body.id}`);
+  const ics = await call('GET', '/calendar.ics');
+  assert.doesNotMatch(ics.text, /主担当: インド側/);
   assert.equal((await call('GET', '/api/events?side=JP')).body.length, 1);
   assert.equal((await call('GET', '/api/events?side=IN')).body.length, 1);
   assert.equal((await call('GET', '/api/events?from=2026-11-01T00:00:00Z')).body.length, 0);
@@ -121,11 +136,14 @@ test('ics feed lists non-cancelled events, also via function rewrite path', asyn
   const types = (await call('GET', '/api/types')).body;
   await call('POST', '/api/events', { title: '来客対応', title_en: 'Visitor', type_id: types[0].id, start_at: '2026-12-01T02:00:00Z', end_at: '2026-12-01T04:00:00Z' });
   await call('POST', '/api/events', { title: '中止イベント', type_id: types[0].id, start_at: '2026-12-02T02:00:00Z', status: 'cancelled' });
+  await call('POST', '/api/events', { title: '拠点担当', title_en: 'Side owner', type_id: types[0].id, start_at: '2026-12-03T02:00:00Z', owner_side: 'IN' });
   const r = await call('GET', '/calendar.ics?lang=en');
   assert.equal(r.status, 200);
   assert.match(r.headers.get('content-type'), /text\/calendar/);
   assert.match(r.text, /SUMMARY:\[Management Meeting\] Visitor/);
   assert.doesNotMatch(r.text, /中止イベント/);
+  assert.match(r.text, /DESCRIPTION:Owner: India side/);
+  assert.match((await call('GET', '/calendar.ics')).text, /DESCRIPTION:主担当: インド側/);
   const viaFn = await call('GET', '/.netlify/functions/api/calendar.ics?lang=en');
   assert.equal(viaFn.status, 200); assert.match(viaFn.text, /BEGIN:VEVENT/);
   assert.equal((await call('GET', '/.netlify/functions/api/events')).status, 200);

@@ -97,7 +97,13 @@
   const typeLabel = (x) => (state.lang === 'en' ? x.label_en || x.label_ja : x.label_ja);
   const memberName = (m) => (state.lang === 'en' ? m.name_en || m.name : m.name);
   const evTitle = (ev) => (state.lang === 'en' && ev.title_en ? ev.title_en : ev.title);
-  const ownerName = (ev) => (ev.owner_id ? (state.lang === 'en' && ev.owner_name_en ? ev.owner_name_en : ev.owner_name) : t('unassigned'));
+  const ownerName = (ev) => {
+    if (ev.owner_id) return state.lang === 'en' && ev.owner_name_en ? ev.owner_name_en : ev.owner_name;
+    if (ev.owner_side) return t(ev.owner_side === 'JP' ? 'side_jp' : 'side_in');
+    return t('unassigned');
+  };
+  const ownerHtml = (ev) => `${sideBadge(ev.owner_side)} <b>${esc(ownerName(ev))}</b>${ev.owner_dept ? ` <span class="dept">${esc(ev.owner_dept)}</span>` : ''}`;
+  const memberLabel = (m) => memberName(m) + (m.dept ? ` · ${m.dept}` : '');
   const sideBadge = (side) => (side ? `<span class="side-badge ${side}">${side}</span>` : '');
   const fmtSize = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1048576).toFixed(1)} MB`);
   function toast(msg, isErr) {
@@ -134,7 +140,11 @@
     ).join('');
     $('#fOwner').innerHTML = `<option value="">${esc(t('all_owners'))}</option>${memberOpts}`;
     $('#fOwner').value = keepOwner;
-    $('#formOwner').innerHTML = `<option value="">${esc(t('unassigned'))}</option>${memberOpts}`;
+    const ownerOpts = ['JP', 'IN'].map((side) =>
+      `<optgroup label="${esc(t(side === 'JP' ? 'side_jp' : 'side_in'))}"><option value="side:${side}">${esc(t(side === 'JP' ? 'owner_side_jp' : 'owner_side_in'))}</option>` +
+      state.members.filter((m) => m.side === side).map((m) => `<option value="${m.id}">${esc(memberLabel(m))}</option>`).join('') + '</optgroup>'
+    ).join('');
+    $('#formOwner').innerHTML = `<option value="">${esc(t('unassigned'))}</option>${ownerOpts}`;
     $('#formMembers').innerHTML = ['JP', 'IN'].map((side) =>
       `<div class="group">${esc(t(side === 'JP' ? 'side_jp' : 'side_in'))}</div>` +
       state.members.filter((m) => m.side === side).map((m) => `<label><input type="checkbox" name="member_ids" value="${m.id}" />${esc(memberName(m))}</label>`).join('')
@@ -174,7 +184,7 @@
       if (status && ev.status !== status) return false;
       if (from && evEnd(ev) < from) return false;
       if (to && new Date(ev.start_at) >= to) return false;
-      if (q && ![ev.title, ev.title_en, ev.location, ev.description, ev.owner_name, ev.owner_name_en].some((s) => (s || '').toLowerCase().includes(q))) return false;
+      if (q && ![ev.title, ev.title_en, ev.location, ev.description, ev.owner_name, ev.owner_name_en, ev.owner_dept].some((s) => (s || '').toLowerCase().includes(q))) return false;
       return true;
     });
   }
@@ -214,7 +224,7 @@
           ${members.length ? `<div class="ev-meta"><span>👥 ${members.slice(0, 6).join(SEP())}${members.length > 6 ? ' ' + esc(t('more', { n: members.length - 6 })) : ''}</span></div>` : ''}
         </div>
         <div class="ev-right">
-          <div>${esc(t('owner'))}: ${sideBadge(ev.owner_side)} <b>${esc(ownerName(ev))}</b></div>
+          <div>${esc(t('owner'))}: ${ownerHtml(ev)}</div>
           <div>📎 ${esc(t('count_materials')(ev.materials_count ?? (ev.materials || []).length))}</div>
         </div>
       </div>`;
@@ -268,10 +278,10 @@
     const all = await api('/api/members?all=1');
     for (const side of ['JP', 'IN']) {
       const rows = all.filter((m) => m.side === side);
-      $(`#members${side}`).innerHTML = `<tr><th>${esc(t('name'))}</th><th>${esc(t('role'))}</th><th>${esc(t('email'))}</th><th></th></tr>` +
+      $(`#members${side}`).innerHTML = `<tr><th>${esc(t('name'))}</th><th>${esc(t('dept'))}</th><th>${esc(t('role'))}</th><th>${esc(t('email'))}</th><th></th></tr>` +
         rows.map((m) => `<tr class="${m.active ? '' : 'inactive'}" data-id="${m.id}">
           <td>${esc(m.name)}${m.name_en ? `<div class="m-meta" style="font-size:.8rem;color:var(--muted)">${esc(m.name_en)}</div>` : ''}</td>
-          <td>${esc(m.role)}</td><td>${esc(m.email)}</td>
+          <td>${esc(m.dept || '')}</td><td>${esc(m.role)}</td><td>${esc(m.email)}</td>
           <td><button class="btn small" data-edit-member="${m.id}">${esc(t('edit'))}</button></td></tr>`).join('');
     }
     $('#view-members')._all = all;
@@ -298,7 +308,7 @@
     $('#dTitle').textContent = evTitle(ev) + (state.lang === 'en' && ev.title_en ? ` (${ev.title})` : ev.title_en ? ` (${ev.title_en})` : '');
     $('#dWhen').innerHTML = fmtWhen(ev, true);
     $('#dLocation').textContent = ev.location || '—';
-    $('#dOwner').innerHTML = `${sideBadge(ev.owner_side)} ${esc(ownerName(ev))}`;
+    $('#dOwner').innerHTML = ownerHtml(ev);
     $('#dMembers').innerHTML = ev.members.length ? ev.members.map((m) => `${sideBadge(m.side)} ${esc(memberName(m))}`).join(SEP()) : '—';
     $('#dStatus').innerHTML = `<span class="status-badge ${ev.status}">${esc(t('status_' + ev.status))}</span>`;
     $('#dDescription').textContent = ev.description || '';
@@ -351,7 +361,7 @@
     fillSelects();
     if (ev) {
       f.title.value = ev.title; f.title_en.value = ev.title_en; f.type_id.value = ev.type_id; f.status.value = ev.status;
-      f.all_day.checked = ev.all_day; f.timezone.value = ev.timezone; f.location.value = ev.location; f.owner_id.value = ev.owner_id || '';
+      f.all_day.checked = ev.all_day; f.timezone.value = ev.timezone; f.location.value = ev.location; f.owner.value = ev.owner_id || (ev.owner_side ? `side:${ev.owner_side}` : '');
       f.description.value = ev.description;
       if (ev.all_day) {
         f.start_date.value = ev.start_at.slice(0, 10);
@@ -384,7 +394,9 @@
     const tz = f.timezone.value;
     const body = {
       title: f.title.value, title_en: f.title_en.value, type_id: f.type_id.value, status: f.status.value,
-      all_day: allDay, timezone: tz, location: f.location.value, owner_id: f.owner_id.value || null,
+      all_day: allDay, timezone: tz, location: f.location.value,
+      owner_id: f.owner.value && !f.owner.value.startsWith('side:') ? f.owner.value : null,
+      owner_side: f.owner.value.startsWith('side:') ? f.owner.value.slice(5) : null,
       description: f.description.value,
       member_ids: $$('input[name=member_ids]:checked', f).map((cb) => cb.value),
     };
@@ -415,14 +427,14 @@
     f.reset();
     $('#memberFormTitle').textContent = t(m ? 'edit_member' : 'add_member');
     $('#btnDeactivateMember').hidden = !m || !m.active;
-    if (m) { f.name.value = m.name; f.name_en.value = m.name_en; f.side.value = m.side; f.role.value = m.role; f.email.value = m.email; }
+    if (m) { f.name.value = m.name; f.name_en.value = m.name_en; f.side.value = m.side; f.dept.value = m.dept || ''; f.role.value = m.role; f.email.value = m.email; }
     $('#memberModal').hidden = false;
     f.name.focus();
   }
   async function submitMemberForm(e) {
     e.preventDefault();
     const f = $('#memberForm');
-    const body = { name: f.name.value, name_en: f.name_en.value, side: f.side.value, role: f.role.value, email: f.email.value };
+    const body = { name: f.name.value, name_en: f.name_en.value, side: f.side.value, dept: f.dept.value, role: f.role.value, email: f.email.value };
     if (editingMember && !editingMember.active) body.active = true;
     try {
       if (editingMember) await api(`/api/members/${editingMember.id}`, { method: 'PUT', body: json(body) });

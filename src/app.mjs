@@ -54,7 +54,7 @@ export function createHandler({ passcode = '', secret = '', maxUploadMb = 4 } = 
     if (req.method === 'POST' && !id) {
       const b = await readJson(req); if (!b) return err('invalid_json', 400);
       const name = str(b.name); if (!name) return err('name_required', 400);
-      const m = { id: newId(), name, name_en: str(b.name_en), side: b.side === 'IN' ? 'IN' : 'JP', email: str(b.email), role: str(b.role), active: 1, created_at: nowIso() };
+      const m = { id: newId(), name, name_en: str(b.name_en), side: b.side === 'IN' ? 'IN' : 'JP', dept: str(b.dept), email: str(b.email), role: str(b.role), active: 1, created_at: nowIso() };
       return json(await store.putDoc('members', m.id, m), 201);
     }
     if (!id) return err('not_found', 404);
@@ -65,6 +65,7 @@ export function createHandler({ passcode = '', secret = '', maxUploadMb = 4 } = 
       const m = { ...cur, name,
         name_en: b.name_en !== undefined ? str(b.name_en) : cur.name_en,
         side: b.side === 'IN' || b.side === 'JP' ? b.side : cur.side,
+        dept: b.dept !== undefined ? str(b.dept) : cur.dept ?? '',
         email: b.email !== undefined ? str(b.email) : cur.email,
         role: b.role !== undefined ? str(b.role) : cur.role,
         active: b.active !== undefined ? (b.active ? 1 : 0) : cur.active };
@@ -109,7 +110,8 @@ export function createHandler({ passcode = '', secret = '', maxUploadMb = 4 } = 
     const owner = members.find((m) => m.id === ev.owner_id) || null;
     return { ...ev,
       type_key: t.key, type_label_ja: t.label_ja, type_label_en: t.label_en, type_color: t.color || '#5d6d7e',
-      owner_name: owner?.name ?? null, owner_name_en: owner?.name_en ?? null, owner_side: owner?.side ?? null,
+      owner_name: owner?.name ?? null, owner_name_en: owner?.name_en ?? null, owner_dept: owner?.dept ?? null,
+      owner_side: owner?.side ?? (ev.owner_side === 'JP' || ev.owner_side === 'IN' ? ev.owner_side : null),
       members: (ev.member_ids || []).map((id) => members.find((m) => m.id === id)).filter(Boolean)
         .map((m) => ({ id: m.id, name: m.name, name_en: m.name_en, side: m.side })) };
   }
@@ -140,6 +142,9 @@ export function createHandler({ passcode = '', secret = '', maxUploadMb = 4 } = 
     out.description = b.description !== undefined ? String(b.description) : cur?.description ?? '';
     out.owner_id = b.owner_id !== undefined ? (b.owner_id ? String(b.owner_id) : null) : cur?.owner_id ?? null;
     if (out.owner_id && !members.some((m) => m.id === out.owner_id)) return { error: 'invalid_owner' };
+    // Owner can also be a side (Japan / India) without naming a person yet.
+    const side = b.owner_side !== undefined ? b.owner_side : cur?.owner_side;
+    out.owner_side = out.owner_id ? null : (side === 'JP' || side === 'IN' ? side : null);
     out.status = b.status !== undefined ? String(b.status) : cur?.status ?? 'planned';
     if (!STATUSES.has(out.status)) return { error: 'invalid_status' };
     if (b.member_ids !== undefined) {

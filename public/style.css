@@ -75,6 +75,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid rgba(31,111,95,.3
 
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
 .table { width: 100%; border-collapse: collapse; background: #fff; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); margin-bottom: 1.5rem; }
+.dept { color: var(--muted); font-size: .85em; }
 .table th, .table td { text-align: left; padding: .5rem .7rem; border-bottom: 1px solid var(--line); vertical-align: middle; }
 .table th { font-size: .8rem; color: var(--muted); font-weight: 600; background: #fafbfc; }
 .table tr.inactive td { color: var(--muted); text-decoration: line-through; }
@@ -92,6 +93,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid rgba(31,111,95,.3
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem 1rem; }
 .form-grid label, .form-grid .label { display: block; font-size: .85rem; color: var(--muted); }
 .form-grid label > span, .form-grid .label { display: block; margin-bottom: .2rem; }
+.form-grid .hint { display: block; font-size: .75rem; color: var(--muted); margin-top: .15rem; }
 .form-grid label.check { display: flex; align-items: center; gap: .4rem; color: var(--text); }
 .form-grid label.check input { width: auto; }
 .form-grid label.check span { margin: 0; }
