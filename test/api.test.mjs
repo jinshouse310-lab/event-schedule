@@ -7,19 +7,21 @@ import { BlobsServer } from '@netlify/blobs/server';
 import { setEnvironmentContext } from '@netlify/blobs';
 import { createHandler } from '../src/app.mjs';
 
-let blobs, dir, handler;
+let blobs, dir, handler, cookie;
 before(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bgsched-'));
   blobs = new BlobsServer({ directory: dir, token: 't' });
   const { port } = await blobs.start();
   const edgeURL = `http://127.0.0.1:${port}`;
   setEnvironmentContext({ edgeURL, uncachedEdgeURL: edgeURL, siteID: 'test-site', token: 't' });
-  handler = createHandler({ passcode: '', maxUploadMb: 1 });
+  handler = createHandler({ passcode: 'team-pass', maxUploadMb: 1 });
+  const login = await handler(new Request('http://localhost/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ passcode: 'team-pass' }) }));
+  cookie = login.headers.get('set-cookie').split(';')[0];
 });
 after(async () => { await blobs.stop(); fs.rmSync(dir, { recursive: true, force: true }); });
 
 const call = async (method, url, body, headers = {}) => {
-  const init = { method, headers: { ...headers } };
+  const init = { method, headers: { cookie, ...headers } };
   if (body instanceof FormData) init.body = body;
   else if (body !== undefined) { init.body = JSON.stringify(body); init.headers['content-type'] = 'application/json'; }
   const res = await handler(new Request('http://localhost' + url, init));
@@ -129,8 +131,15 @@ test('ics feed lists non-cancelled events, also via function rewrite path', asyn
   assert.equal((await call('GET', '/.netlify/functions/api/events')).status, 200);
 });
 
-test('passcode auth protects API and login sets cookie', async () => {
-  const h = createHandler({ passcode: 'secret123', secret: 's' });
+test('passcode auth: unconfigured refuses, login sets cookie, ICS key works without cookie', async () => {
+  const none = createHandler({ passcode: '' });
+  const r503 = await none(new Request('http://localhost/api/events'));
+  assert.equal(r503.status, 503); assert.equal((await r503.json()).error, 'passcode_not_configured');
+  const authInfo = await (await none(new Request('http://localhost/api/auth'))).json();
+  assert.deepEqual(authInfo, { required: true, configured: false, authed: false });
+  assert.equal((await none(new Request('http://localhost/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"passcode":"x"}' }))).status, 503);
+
+  const h = createHandler({ passcode: 'secret123' }); // no SESSION_SECRET: derived from passcode
   const c = async (method, url, body, headers) => {
     const init = { method, headers: { ...headers } };
     if (body) { init.body = JSON.stringify(body); init.headers['content-type'] = 'application/json'; }
@@ -139,12 +148,25 @@ test('passcode auth protects API and login sets cookie', async () => {
   assert.equal((await c('GET', '/api/events')).status, 401);
   assert.equal((await c('GET', '/calendar.ics')).status, 401);
   assert.equal((await c('GET', '/api/config')).status, 200);
+  assert.equal((await (await c('GET', '/api/config')).json()).icsKey, undefined);
   assert.equal((await c('POST', '/api/login', { passcode: 'nope' })).status, 403);
   const ok = await c('POST', '/api/login', { passcode: 'secret123' });
   assert.equal(ok.status, 200);
-  const cookie = ok.headers.get('set-cookie').split(';')[0];
+  const ck = ok.headers.get('set-cookie').split(';')[0];
   assert.doesNotMatch(ok.headers.get('set-cookie'), /Secure/);
-  assert.equal((await c('GET', '/api/events', null, { cookie })).status, 200);
+  assert.equal((await c('GET', '/api/events', null, { cookie: ck })).status, 200);
+  assert.deepEqual(await (await c('GET', '/api/auth', null, { cookie: ck })).json(), { required: true, configured: true, authed: true });
+  const cfg = await (await c('GET', '/api/config', null, { cookie: ck })).json();
+  assert.ok(cfg.icsKey && cfg.icsKey.length >= 20);
+  // Same passcode in a fresh handler instance (new function invocation) yields the same cookie and key.
+  const h2 = createHandler({ passcode: 'secret123' });
+  assert.equal((await h2(new Request('http://localhost/api/events', { headers: { cookie: ck } }))).status, 200);
+  assert.equal((await h2(new Request(`http://localhost/calendar.ics?key=${cfg.icsKey}&lang=en`))).status, 200);
+  assert.equal((await h2(new Request('http://localhost/calendar.ics?key=wrong'))).status, 401);
+  assert.equal((await h2(new Request(`http://localhost/api/events?key=${cfg.icsKey}`))).status, 401);
   const https = await h(new Request('https://example.netlify.app/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ passcode: 'secret123' }) }));
   assert.match(https.headers.get('set-cookie'), /Secure/);
+  // Changing the passcode invalidates old cookies.
+  const h3 = createHandler({ passcode: 'rotated' });
+  assert.equal((await h3(new Request('http://localhost/api/events', { headers: { cookie: ck } }))).status, 401);
 });

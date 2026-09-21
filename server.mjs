@@ -46,7 +46,7 @@ function serveStatic(res, file) {
 
 async function main() {
   await startLocalBlobs(path.join(DATA_DIR, 'blobs'));
-  const handler = createHandler({ passcode: process.env.APP_PASSCODE || '', secret: process.env.SESSION_SECRET || 'change-me', maxUploadMb: process.env.MAX_UPLOAD_MB || 50 });
+  const handler = createHandler({ passcode: process.env.APP_PASSCODE || '', secret: process.env.SESSION_SECRET || '', maxUploadMb: process.env.MAX_UPLOAD_MB || 50 });
   http.createServer(async (req, res) => {
     const pathname = new URL(req.url, 'http://x').pathname;
     try {
@@ -61,7 +61,7 @@ async function main() {
   }).listen(PORT, () => {
     console.log(`Biogas event schedule listening on http://localhost:${PORT}`);
     console.log(`Data directory: ${DATA_DIR}`);
-    if (!process.env.APP_PASSCODE) console.log('APP_PASSCODE is not set: login is disabled.');
+    if (!process.env.APP_PASSCODE) console.log('WARNING: APP_PASSCODE is not set. The app will refuse access until it is set.');
   });
 }
 

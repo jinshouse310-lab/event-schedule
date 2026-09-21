@@ -144,7 +144,7 @@
   // ---------- load ----------
   async function loadMeta() {
     [state.types, state.members, state.config] = await Promise.all([api('/api/types'), api('/api/members'), api('/api/config')]);
-    $('#logoutBox').hidden = !state.config.authRequired;
+    $('#logoutBox').hidden = false;
   }
   async function loadEvents() {
     state.events = await api('/api/events');
@@ -284,8 +284,9 @@
       all.map((x) => `<tr class="${x.active ? '' : 'inactive'}"><td><span class="color-dot" style="background:${x.color}"></span>${esc(x.label_ja)}</td><td>${esc(x.label_en)}</td><td>${x.sort_order}</td>
         <td><button class="btn small" data-edit-type="${x.id}">${esc(t('edit'))}</button></td></tr>`).join('');
     $('#typesTable')._all = all;
-    $('#icsUrlJa').textContent = `${location.origin}/calendar.ics`;
-    $('#icsUrlEn').textContent = `${location.origin}/calendar.ics?lang=en`;
+    const key = state.config.icsKey ? `key=${encodeURIComponent(state.config.icsKey)}` : '';
+    $('#icsUrlJa').textContent = `${location.origin}/calendar.ics?${key}`;
+    $('#icsUrlEn').textContent = `${location.origin}/calendar.ics?${key}&lang=en`;
   }
 
   // ---------- detail modal ----------
@@ -551,6 +552,11 @@
 
   // ---------- boot ----------
   (async () => {
+    // Gate: everything requires the shared passcode. Redirect before rendering any data.
+    try {
+      const a = await fetch('/api/auth').then((r) => r.json());
+      if (!a.authed) { location.replace('/login'); return; }
+    } catch { location.replace('/login'); return; }
     wire();
     try {
       await loadMeta();

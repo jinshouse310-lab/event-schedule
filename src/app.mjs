@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { createStore, newId, nowIso } from './store.mjs';
 import { buildIcs } from './ics.mjs';
 
@@ -27,12 +27,19 @@ const safeEq = (a, b) => { const x = Buffer.from(a), y = Buffer.from(b); return 
  * Creates a fetch-style handler `(Request) => Promise<Response>` used by both the
  * Netlify Function and the local dev server.
  */
-export function createHandler({ passcode = '', secret = 'change-me', maxUploadMb = 4 } = {}) {
-  const authEnabled = Boolean(passcode);
-  const token = authEnabled ? createHmac('sha256', secret).update('ok:' + passcode).digest('base64url') : '';
+export function createHandler({ passcode = '', secret = '', maxUploadMb = 4 } = {}) {
+  // Access is always passcode-protected. Without APP_PASSCODE the app refuses to serve data
+  // instead of silently becoming public.
+  const configured = Boolean(passcode);
+  // SESSION_SECRET is optional: derive one from the passcode so a single env var is enough.
+  secret = secret || createHash('sha256').update('bgsched-secret:' + passcode).digest('hex');
+  const token = configured ? createHmac('sha256', secret).update('ok:' + passcode).digest('base64url') : '';
+  // Key that lets calendar clients (which cannot log in) read the iCalendar feed.
+  const icsKey = configured ? createHmac('sha256', secret).update('ics:' + passcode).digest('base64url').slice(0, 32) : '';
   maxUploadMb = Number(maxUploadMb) || 4;
 
-  const isAuthed = (req) => !authEnabled || safeEq(parseCookies(req.headers.get('cookie'))[COOKIE] || '', token);
+  const hasCookie = (req) => configured && safeEq(parseCookies(req.headers.get('cookie'))[COOKIE] || '', token);
+  const hasIcsKey = (url) => configured && safeEq(url.searchParams.get('key') || '', icsKey);
 
   async function readJson(req) {
     try { return (await req.json()) || {}; } catch { return null; }
@@ -258,17 +265,21 @@ export function createHandler({ passcode = '', secret = 'change-me', maxUploadMb
     const method = req.method;
 
     try {
+      if (seg[0] === 'auth' && method === 'GET') return json({ required: true, configured, authed: hasCookie(req) });
+      if (seg[0] === 'config' && method === 'GET') {
+        const authed = hasCookie(req);
+        return json({ maxUploadMb, authRequired: true, configured, authed, icsKey: authed ? icsKey : undefined });
+      }
+      if (!configured) return err('passcode_not_configured', 503);
       if (seg[0] === 'login' && method === 'POST') {
-        if (!authEnabled) return json({ ok: true });
         const b = await readJson(req);
         if (!b || !safeEq(String(b.passcode || ''), passcode)) return err('bad_passcode', 403);
         const secure = url.protocol === 'https:' || req.headers.get('x-forwarded-proto') === 'https';
         return json({ ok: true }, 200, { 'set-cookie': `${COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax;${secure ? ' Secure;' : ''} Max-Age=${60 * 60 * 24 * 90}` });
       }
       if (seg[0] === 'logout' && method === 'POST') return json({ ok: true }, 200, { 'set-cookie': `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0` });
-      if (seg[0] === 'auth' && method === 'GET') return json({ required: authEnabled });
-      if (seg[0] === 'config' && method === 'GET') return json({ maxUploadMb, authRequired: authEnabled });
-      if (!isAuthed(req)) return err('unauthorized', 401);
+      const isIcs = seg[0] === 'calendar.ics' && method === 'GET';
+      if (!hasCookie(req) && !(isIcs && hasIcsKey(url))) return err('unauthorized', 401);
 
       const store = createStore();
       if (seg[0] === 'calendar.ics' && method === 'GET') {

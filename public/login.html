@@ -10,7 +10,8 @@
 <body class="login-body">
   <main class="login-card">
     <h1>バイオガス事業本部<br /><span class="sub">Biogas Division Event Schedule</span></h1>
-    <p>共有パスコードを入力してください / Enter the shared passcode</p>
+    <p id="notice" class="error" hidden>パスコードが未設定です。Netlify の Site configuration → Environment variables で <code>APP_PASSCODE</code> を設定し、再デプロイしてください。<br /><span class="sub">Passcode is not configured. Set <code>APP_PASSCODE</code> in Netlify environment variables and redeploy.</span></p>
+    <p id="prompt">共有パスコードを入力してください / Enter the shared passcode</p>
     <form id="loginForm">
       <input type="password" id="passcode" name="passcode" autocomplete="current-password" placeholder="Passcode" required autofocus />
       <button type="submit" class="btn primary">ログイン / Login</button>
@@ -18,6 +19,10 @@
     </form>
   </main>
   <script>
+    fetch('/api/auth').then((r) => r.json()).then((a) => {
+      if (a.authed) { location.replace('/'); return; }
+      if (!a.configured) { document.getElementById('notice').hidden = false; document.getElementById('loginForm').hidden = true; document.getElementById('prompt').hidden = true; }
+    }).catch(() => {});
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const passcode = document.getElementById('passcode').value;
