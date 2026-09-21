@@ -230,7 +230,10 @@
         </div>
         <div class="ev-right">
           <div>📎 ${esc(t('count_materials')(ev.materials_count ?? (ev.materials || []).length))}</div>
-          <button class="btn small edit-btn" data-edit="${ev.id}" title="${esc(t('edit'))}">✎ ${esc(t('edit'))}</button>
+          <div class="card-actions">
+            <button class="btn small edit-btn" data-copy="${ev.id}" title="${esc(t('copy'))}">⧉ ${esc(t('copy'))}</button>
+            <button class="btn small edit-btn" data-edit="${ev.id}" title="${esc(t('edit'))}">✎ ${esc(t('edit'))}</button>
+          </div>
         </div>
       </div>`;
   }
@@ -358,15 +361,16 @@
   }
 
   // ---------- event form ----------
-  function openEventForm(ev, from = null) {
-    state.editingEvent = ev || null;
+  // copy = true opens a NEW event form prefilled from `ev` (materials are not copied).
+  function openEventForm(ev, from = null, copy = false) {
+    state.editingEvent = copy ? null : ev || null;
     state.editFrom = from;
     const f = $('#eventForm');
     f.reset();
-    $('#eventFormTitle').textContent = t(ev ? 'edit_event_title' : 'new_event_title');
+    $('#eventFormTitle').textContent = t(copy ? 'copy_event_title' : ev ? 'edit_event_title' : 'new_event_title');
     fillSelects();
     if (ev) {
-      f.title.value = ev.title; f.title_en.value = ev.title_en; f.type_id.value = ev.type_id; f.status.value = ev.status;
+      f.title.value = ev.title; f.title_en.value = ev.title_en; f.type_id.value = ev.type_id; f.status.value = copy ? 'planned' : ev.status;
       f.all_day.checked = ev.all_day; f.timezone.value = ev.timezone; f.location.value = ev.location; f.owner.value = ev.owner_id || (ev.owner_side ? `side:${ev.owner_side}` : '');
       f.description.value = ev.description;
       if (ev.all_day) {
@@ -391,7 +395,12 @@
   function toggleAllDay() {
     const f = $('#eventForm');
     const allDay = f.all_day.checked;
+    // All-day events have no time: hide the time inputs and the input-timezone selector.
     f.start_time.disabled = allDay; f.end_time.disabled = allDay; f.timezone.disabled = allDay;
+    f.start_time.hidden = allDay; f.end_time.hidden = allDay;
+    f.timezone.closest('label').hidden = allDay;
+    if (allDay) { f.start_time.value = ''; f.end_time.value = ''; }
+    else if (!f.start_time.value) { f.start_time.value = '10:00'; f.end_time.value = '11:00'; }
   }
   async function submitEventForm(e) {
     e.preventDefault();
@@ -505,6 +514,8 @@
     $('#eventList').addEventListener('click', async (e) => {
       const editBtn = e.target.closest('[data-edit]');
       if (editBtn) { e.stopPropagation(); openEventForm(await api(`/api/events/${editBtn.dataset.edit}`)); return; }
+      const copyBtn = e.target.closest('[data-copy]');
+      if (copyBtn) { e.stopPropagation(); openEventForm(await api(`/api/events/${copyBtn.dataset.copy}`), null, true); return; }
       const c = e.target.closest('.event-card'); if (c) openDetail(c.dataset.id);
     });
     $('#calGrid').addEventListener('click', (e) => { const c = e.target.closest('.cal-ev'); if (c) openDetail(c.dataset.id); });
@@ -519,6 +530,7 @@
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $$('.modal').forEach((m) => (m.hidden = true)); });
 
     // detail actions
+    $('#btnCopyEvent').addEventListener('click', async () => { const ev = await api(`/api/events/${state.detailId}`); $('#detailModal').hidden = true; openEventForm(ev, null, true); });
     $('#btnEditEvent').addEventListener('click', async () => { const ev = await api(`/api/events/${state.detailId}`); $('#detailModal').hidden = true; openEventForm(ev, 'detail'); });
     $('#btnDeleteEvent').addEventListener('click', async () => {
       if (!confirm(t('confirm_delete_event'))) return;
@@ -547,6 +559,14 @@
     // forms
     $('#eventForm').addEventListener('submit', submitEventForm);
     $('#formAllDay').addEventListener('change', toggleAllDay);
+    // When the start date moves, keep the end date on the same day unless it was set to a later day.
+    const f = $('#eventForm');
+    f.start_date.addEventListener('focus', () => { f.start_date.dataset.prev = f.start_date.value; });
+    f.start_date.addEventListener('change', () => {
+      const prev = f.start_date.dataset.prev, next = f.start_date.value;
+      if (!f.end_date.value || f.end_date.value === prev || f.end_date.value < next) f.end_date.value = next;
+      f.start_date.dataset.prev = next;
+    });
     $('#btnNewMember').addEventListener('click', () => openMemberForm(null));
     $('#memberForm').addEventListener('submit', submitMemberForm);
     $('#view-members').addEventListener('click', (e) => {
