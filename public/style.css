@@ -50,6 +50,8 @@ input:focus, select:focus, textarea:focus { outline: 2px solid rgba(31,111,95,.3
 .event-card.cancelled .ev-title { text-decoration: line-through; }
 .ev-title { font-weight: 600; font-size: 1.02rem; }
 .ev-meta { color: var(--muted); font-size: .88rem; display: flex; flex-wrap: wrap; gap: .3rem 1rem; }
+.ev-people { margin-top: .2rem; }
+.ev-owner b { color: var(--text); }
 .ev-right { text-align: right; font-size: .85rem; color: var(--muted); display: flex; flex-direction: column; gap: .3rem; align-items: flex-end; }
 .type-badge { display: inline-block; padding: .1rem .55rem; border-radius: 999px; color: #fff; font-size: .78rem; font-weight: 600; white-space: nowrap; }
 .side-badge { display: inline-block; padding: 0 .4rem; border-radius: 4px; font-size: .72rem; font-weight: 700; color: #fff; vertical-align: middle; }

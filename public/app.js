@@ -222,10 +222,12 @@
             <span>🕒 ${fmtWhen(ev, false)}</span>
             ${ev.location ? `<span>📍 ${esc(ev.location)}</span>` : ''}
           </div>
-          ${members.length ? `<div class="ev-meta"><span>👥 ${members.slice(0, 6).join(SEP())}${members.length > 6 ? ' ' + esc(t('more', { n: members.length - 6 })) : ''}</span></div>` : ''}
+          <div class="ev-meta ev-people">
+            <span class="ev-owner">${esc(t('owner'))}: ${ownerHtml(ev)}</span>
+            ${members.length ? `<span>👥 ${members.slice(0, 6).join(SEP())}${members.length > 6 ? ' ' + esc(t('more', { n: members.length - 6 })) : ''}</span>` : ''}
+          </div>
         </div>
         <div class="ev-right">
-          <div>${esc(t('owner'))}: ${ownerHtml(ev)}</div>
           <div>📎 ${esc(t('count_materials')(ev.materials_count ?? (ev.materials || []).length))}</div>
           <button class="btn small edit-btn" data-edit="${ev.id}" title="${esc(t('edit'))}">✎ ${esc(t('edit'))}</button>
         </div>
