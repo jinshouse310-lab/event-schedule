@@ -158,14 +158,15 @@ export function createHandler({ passcode = '', secret = '', maxUploadMb = 4 } = 
     const [types, members] = await Promise.all([store.getTypes(), store.getMembers()]);
     if (req.method === 'GET' && !id) {
       const q = url.searchParams;
-      const [events, materialKeys] = await Promise.all([store.listDocs('events'), store.listKeys('materials')]);
-      const counts = {};
-      for (const k of materialKeys) { const evId = k.split('/')[0]; counts[evId] = (counts[evId] || 0) + 1; }
+      const [events, allMaterials] = await Promise.all([store.listDocs('events'), store.listDocs('materials')]);
+      const byEvent = {};
+      for (const m of allMaterials) (byEvent[m.event_id] ||= []).push(m);
+      for (const list of Object.values(byEvent)) list.sort((a, b) => b.created_at.localeCompare(a.created_at));
       const from = isIso(q.get('from')) ? toIso(q.get('from')) : null;
       const to = isIso(q.get('to')) ? toIso(q.get('to')) : null;
       const text = str(q.get('q')).toLowerCase();
       const side = q.get('side');
-      const list = events.map((ev) => ({ ...decorate(ev, types, members), materials_count: counts[ev.id] || 0 })).filter((ev) => {
+      const list = events.map((ev) => ({ ...decorate(ev, types, members), materials: byEvent[ev.id] || [], materials_count: (byEvent[ev.id] || []).length })).filter((ev) => {
         if (from && (ev.end_at || ev.start_at) < from) return false;
         if (to && ev.start_at >= to) return false;
         if (q.get('type') && ev.type_id !== q.get('type')) return false;

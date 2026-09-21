@@ -11,9 +11,7 @@
     members: [],
     events: [],
     calMonth: null, // {y, m}
-    detailId: null,
     editingEvent: null,
-    editFrom: null, // 'detail' when the form was opened from the detail dialog
     config: { maxUploadMb: 50, authRequired: false },
   };
   const TZ_LABEL = { 'Asia/Tokyo': 'JST', 'Asia/Kolkata': 'IST' };
@@ -227,9 +225,9 @@
             <span class="ev-owner">${esc(t('owner'))}: ${ownerHtml(ev)}</span>
             ${members.length ? `<span>👥 ${members.slice(0, 6).join(SEP())}${members.length > 6 ? ' ' + esc(t('more', { n: members.length - 6 })) : ''}</span>` : ''}
           </div>
+          ${(ev.materials || []).length ? `<div class="ev-meta ev-materials">📎 ${ev.materials.map(materialChip).join('')}</div>` : ''}
         </div>
         <div class="ev-right">
-          <div>📎 ${esc(t('count_materials')(ev.materials_count ?? (ev.materials || []).length))}</div>
           <div class="card-actions">
             <button class="btn small edit-btn" data-copy="${ev.id}" title="${esc(t('copy'))}">⧉ ${esc(t('copy'))}</button>
             <button class="btn small edit-btn" data-edit="${ev.id}" title="${esc(t('edit'))}">✎ ${esc(t('edit'))}</button>
@@ -307,42 +305,29 @@
     $('#icsUrlEn').textContent = `${location.origin}/calendar.ics?${key}&lang=en`;
   }
 
-  // ---------- detail modal ----------
-  async function openDetail(id) {
-    const ev = await api(`/api/events/${id}`);
-    state.detailId = id;
-    $('#dType').textContent = typeLabel({ label_ja: ev.type_label_ja, label_en: ev.type_label_en });
-    $('#dType').style.background = ev.type_color;
-    $('#dTitle').textContent = evTitle(ev) + (state.lang === 'en' && ev.title_en ? ` (${ev.title})` : ev.title_en ? ` (${ev.title_en})` : '');
-    $('#dWhen').innerHTML = fmtWhen(ev, true);
-    $('#dLocation').textContent = ev.location || '—';
-    $('#dOwner').innerHTML = ownerHtml(ev);
-    $('#dMembers').innerHTML = ev.members.length ? ev.members.map((m) => `${sideBadge(m.side)} ${esc(memberName(m))}`).join(SEP()) : '—';
-    $('#dStatus').innerHTML = `<span class="status-badge ${ev.status}">${esc(t('status_' + ev.status))}</span>`;
-    $('#dDescription').textContent = ev.description || '';
-    $('#dDescription').hidden = !ev.description;
-    renderMaterials(ev.materials);
-    $('#uploadHint').textContent = `${t('upload_hint')} (≤ ${state.config.maxUploadMb} MB)`;
-    $('#detailModal').hidden = false;
-  }
+  // ---------- materials (inside the event dialog) ----------
+  const materialHref = (m) => (m.kind === 'link' ? m.url : `/api/materials/${m.event_id}/${m.id}/download`);
+  const materialChip = (m) => `<a class="mat-chip" href="${esc(materialHref(m))}" target="_blank" rel="noopener" title="${esc(m.name)}">${m.kind === 'link' ? '🔗' : '📄'} ${esc(m.name)}</a>`;
   function renderMaterials(list) {
     const ul = $('#dMaterials');
     if (!list.length) { ul.innerHTML = `<li class="m-meta">${esc(t('no_materials'))}</li>`; return; }
     ul.innerHTML = list.map((m) => `<li>
       <span>${m.kind === 'link' ? '🔗' : '📄'}</span>
-      <a class="m-name" href="${m.kind === 'link' ? esc(m.url) : `/api/materials/${m.event_id}/${m.id}/download`}" target="_blank" rel="noopener" title="${esc(m.name)}">${esc(m.name)}</a>
+      <a class="m-name" href="${esc(materialHref(m))}" target="_blank" rel="noopener" title="${esc(m.name)}">${esc(m.name)}</a>
       <span class="m-meta">${m.kind === 'file' ? fmtSize(m.size) + ' · ' : ''}${esc(m.created_at.slice(0, 10))}${m.uploaded_by ? ' · ' + esc(m.uploaded_by) : ''}</span>
-      <button class="icon-btn" data-del-material="${m.id}" title="${esc(t('delete'))}">&times;</button>
+      <button type="button" class="icon-btn" data-del-material="${m.id}" title="${esc(t('delete'))}">&times;</button>
     </li>`).join('');
   }
-  async function refreshDetailMaterials() {
-    const ev = await api(`/api/events/${state.detailId}`);
+  async function refreshMaterials() {
+    if (!state.editingEvent) return;
+    const ev = await api(`/api/events/${state.editingEvent.id}`);
+    state.editingEvent = ev;
     renderMaterials(ev.materials);
     await refreshAll(false);
   }
 
   async function uploadFiles(files) {
-    if (!files || !files.length) return;
+    if (!files || !files.length || !state.editingEvent) return;
     const prog = $('#uploadProgress');
     prog.hidden = false;
     let i = 0;
@@ -352,23 +337,23 @@
       const fd = new FormData();
       fd.append('file', f);
       try {
-        await api(`/api/events/${state.detailId}/materials/upload`, { method: 'POST', body: fd });
+        await api(`/api/events/${state.editingEvent.id}/materials/upload`, { method: 'POST', body: fd });
       } catch (e) { toast(errMsg(e), true); }
     }
     prog.hidden = true;
     toast(t('uploaded'));
-    await refreshDetailMaterials();
+    await refreshMaterials();
   }
 
   // ---------- event form ----------
   // copy = true opens a NEW event form prefilled from `ev` (materials are not copied).
-  function openEventForm(ev, from = null, copy = false) {
+  function openEventForm(ev, copy = false) {
     state.editingEvent = copy ? null : ev || null;
-    state.editFrom = from;
     const f = $('#eventForm');
     f.reset();
     $('#eventFormTitle').textContent = t(copy ? 'copy_event_title' : ev ? 'edit_event_title' : 'new_event_title');
     fillSelects();
+    setDialogMode();
     if (ev) {
       f.title.value = ev.title; f.title_en.value = ev.title_en; f.type_id.value = ev.type_id; f.status.value = copy ? 'planned' : ev.status;
       f.all_day.checked = ev.all_day; f.timezone.value = ev.timezone; f.location.value = ev.location; f.owner.value = ev.owner_id || (ev.owner_side ? `side:${ev.owner_side}` : '');
@@ -391,6 +376,21 @@
     toggleAllDay();
     $('#eventModal').hidden = false;
     f.title.focus();
+  }
+  async function openEvent(id, copy = false) {
+    openEventForm(await api(`/api/events/${id}`), copy);
+  }
+  // Existing event: form + materials panel + delete/copy. New event: form only.
+  function setDialogMode() {
+    const existing = Boolean(state.editingEvent);
+    $('#materialsPanel').hidden = !existing;
+    $('#editLayout').classList.toggle('single', !existing);
+    $('#btnDeleteEvent').hidden = !existing;
+    $('#btnCopyEvent').hidden = !existing;
+    if (existing) {
+      renderMaterials(state.editingEvent.materials || []);
+      $('#uploadHint').textContent = `${t('upload_hint')} (≤ ${state.config.maxUploadMb} MB)`;
+    }
   }
   function toggleAllDay() {
     const f = $('#eventForm');
@@ -424,13 +424,21 @@
       body.end_at = f.end_time.value || f.end_date.value ? zonedToUtc(endDate, f.end_time.value || '23:59', tz).toISOString() : null;
     }
     try {
+      const wasNew = !state.editingEvent;
       const saved = state.editingEvent
         ? await api(`/api/events/${state.editingEvent.id}`, { method: 'PUT', body: json(body) })
         : await api('/api/events', { method: 'POST', body: json(body) });
-      $('#eventModal').hidden = true;
-      toast(t('saved'));
+      if (wasNew) {
+        // Stay in the same dialog so materials can be attached right away.
+        state.editingEvent = saved;
+        $('#eventFormTitle').textContent = t('edit_event_title');
+        setDialogMode();
+        toast(t('saved_add_materials'));
+      } else {
+        $('#eventModal').hidden = true;
+        toast(t('saved'));
+      }
       await refreshAll();
-      if (state.editingEvent && state.editFrom === 'detail') openDetail(saved.id);
     } catch (err) { toast(errMsg(err), true); }
   }
 
@@ -511,14 +519,13 @@
     });
     $('#btnNewEvent').addEventListener('click', () => openEventForm(null));
     ['#fSearch', '#fType', '#fSide', '#fMember', '#fRange', '#fStatus'].forEach((s) => $(s).addEventListener('input', renderList));
-    $('#eventList').addEventListener('click', async (e) => {
-      const editBtn = e.target.closest('[data-edit]');
-      if (editBtn) { e.stopPropagation(); openEventForm(await api(`/api/events/${editBtn.dataset.edit}`)); return; }
+    $('#eventList').addEventListener('click', (e) => {
+      if (e.target.closest('a')) return; // material links open directly
       const copyBtn = e.target.closest('[data-copy]');
-      if (copyBtn) { e.stopPropagation(); openEventForm(await api(`/api/events/${copyBtn.dataset.copy}`), null, true); return; }
-      const c = e.target.closest('.event-card'); if (c) openDetail(c.dataset.id);
+      if (copyBtn) { openEvent(copyBtn.dataset.copy, true); return; }
+      const c = e.target.closest('.event-card'); if (c) openEvent(c.dataset.id);
     });
-    $('#calGrid').addEventListener('click', (e) => { const c = e.target.closest('.cal-ev'); if (c) openDetail(c.dataset.id); });
+    $('#calGrid').addEventListener('click', (e) => { const c = e.target.closest('.cal-ev'); if (c) openEvent(c.dataset.id); });
     $('#calPrev').addEventListener('click', () => { const c = state.calMonth; state.calMonth = c.m === 1 ? { y: c.y - 1, m: 12 } : { y: c.y, m: c.m - 1 }; renderCalendar(); });
     $('#calNext').addEventListener('click', () => { const c = state.calMonth; state.calMonth = c.m === 12 ? { y: c.y + 1, m: 1 } : { y: c.y, m: c.m + 1 }; renderCalendar(); });
     $('#calToday').addEventListener('click', () => { state.calMonth = null; renderCalendar(); });
@@ -529,18 +536,17 @@
     });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $$('.modal').forEach((m) => (m.hidden = true)); });
 
-    // detail actions
-    $('#btnCopyEvent').addEventListener('click', async () => { const ev = await api(`/api/events/${state.detailId}`); $('#detailModal').hidden = true; openEventForm(ev, null, true); });
-    $('#btnEditEvent').addEventListener('click', async () => { const ev = await api(`/api/events/${state.detailId}`); $('#detailModal').hidden = true; openEventForm(ev, 'detail'); });
+    // event dialog actions
+    $('#btnCopyEvent').addEventListener('click', () => { if (state.editingEvent) openEventForm(state.editingEvent, true); });
     $('#btnDeleteEvent').addEventListener('click', async () => {
-      if (!confirm(t('confirm_delete_event'))) return;
-      try { await api(`/api/events/${state.detailId}`, { method: 'DELETE' }); $('#detailModal').hidden = true; toast(t('deleted')); await refreshAll(false); }
+      if (!state.editingEvent || !confirm(t('confirm_delete_event'))) return;
+      try { await api(`/api/events/${state.editingEvent.id}`, { method: 'DELETE' }); $('#eventModal').hidden = true; toast(t('deleted')); await refreshAll(false); }
       catch (err) { toast(errMsg(err), true); }
     });
     $('#dMaterials').addEventListener('click', async (e) => {
       const b = e.target.closest('[data-del-material]'); if (!b) return;
       if (!confirm(t('confirm_delete_material'))) return;
-      try { await api(`/api/materials/${state.detailId}/${b.dataset.delMaterial}`, { method: 'DELETE' }); toast(t('deleted')); await refreshDetailMaterials(); }
+      try { await api(`/api/materials/${state.editingEvent.id}/${b.dataset.delMaterial}`, { method: 'DELETE' }); toast(t('deleted')); await refreshMaterials(); }
       catch (err) { toast(errMsg(err), true); }
     });
     $('#uploadFile').addEventListener('change', (e) => { uploadFiles([...e.target.files]); e.target.value = ''; });
@@ -551,8 +557,8 @@
     $('#linkForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
-        await api(`/api/events/${state.detailId}/materials/link`, { method: 'POST', body: json({ url: $('#linkUrl').value, name: $('#linkName').value }) });
-        $('#linkForm').reset(); toast(t('saved')); await refreshDetailMaterials();
+        await api(`/api/events/${state.editingEvent.id}/materials/link`, { method: 'POST', body: json({ url: $('#linkUrl').value, name: $('#linkName').value }) });
+        $('#linkForm').reset(); toast(t('saved')); await refreshMaterials();
       } catch (err) { toast(errMsg(err), true); }
     });
 

@@ -125,7 +125,10 @@ test('materials: upload (UTF-8 name), link, download, size limit, cascade delete
 
   const detail = (await call('GET', `/api/events/${ev.id}`)).body;
   assert.equal(detail.materials.length, 2);
-  assert.equal((await call('GET', '/api/events')).body.find((e) => e.id === ev.id).materials_count, 2);
+  const listed = (await call('GET', '/api/events')).body.find((e) => e.id === ev.id);
+  assert.equal(listed.materials_count, 2);
+  assert.equal(listed.materials.length, 2);
+  assert.equal(listed.materials.find((m) => m.kind === 'link').url, 'https://example.com/x');
 
   const big = new FormData();
   big.append('file', new Blob([new Uint8Array(1.5 * 1024 * 1024)]), 'big.bin');

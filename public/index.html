@@ -115,26 +115,50 @@
     </section>
   </main>
 
-  <!-- EVENT DETAIL -->
-  <div class="modal" id="detailModal" hidden>
+  <!-- EVENT DIALOG: edit form + materials in one screen -->
+  <div class="modal" id="eventModal" hidden>
     <div class="modal-card wide">
       <div class="modal-head">
-        <span class="type-badge" id="dType"></span>
-        <h2 id="dTitle"></h2>
-        <button class="icon-btn" data-close>&times;</button>
+        <h2 id="eventFormTitle" data-i18n="new_event_title">イベント追加</h2>
+        <button type="button" class="icon-btn" data-close>&times;</button>
       </div>
-      <div class="detail-grid">
-        <div>
-          <dl class="kv">
-            <dt data-i18n="when">日時</dt><dd id="dWhen"></dd>
-            <dt data-i18n="location">場所</dt><dd id="dLocation"></dd>
-            <dt data-i18n="owner">主担当</dt><dd id="dOwner"></dd>
-            <dt data-i18n="participants">関係メンバー</dt><dd id="dMembers"></dd>
-            <dt data-i18n="status">状態</dt><dd id="dStatus"></dd>
-          </dl>
-          <div class="desc" id="dDescription"></div>
-        </div>
-        <div class="materials">
+      <div class="edit-layout" id="editLayout">
+        <form id="eventForm">
+          <div class="form-grid">
+            <label class="span2"><span data-i18n="title_ja">タイトル (日本語)</span><input name="title" required /></label>
+            <label class="span2"><span data-i18n="title_en">Title (English)</span><input name="title_en" /></label>
+            <label><span data-i18n="type">種類</span><select name="type_id" id="formType" required></select></label>
+            <label><span data-i18n="status">状態</span>
+              <select name="status">
+                <option value="planned" data-i18n="status_planned">予定</option>
+                <option value="confirmed" data-i18n="status_confirmed">確定</option>
+                <option value="done" data-i18n="status_done">完了</option>
+                <option value="cancelled" data-i18n="status_cancelled">中止</option>
+              </select>
+            </label>
+            <label class="check span2"><input type="checkbox" name="all_day" id="formAllDay" /><span data-i18n="all_day">終日</span></label>
+            <label><span data-i18n="start">開始</span>
+              <div class="dt"><input type="date" name="start_date" required /><input type="time" name="start_time" /></div>
+            </label>
+            <label><span data-i18n="end">終了</span>
+              <div class="dt"><input type="date" name="end_date" /><input type="time" name="end_time" /></div>
+            </label>
+            <label><span data-i18n="input_tz">入力タイムゾーン</span>
+              <select name="timezone">
+                <option value="Asia/Tokyo">JST (日本 / Japan)</option>
+                <option value="Asia/Kolkata">IST (インド / India)</option>
+              </select>
+            </label>
+            <label><span data-i18n="location">場所</span><input name="location" /></label>
+            <label class="span2"><span data-i18n="owner">主担当</span><select name="owner" id="formOwner"></select><small class="hint" data-i18n="owner_hint">人が未定なら所属 (日本側 / インド側) だけでも指定できます</small></label>
+            <div class="span2">
+              <span class="label" data-i18n="participants">関係メンバー</span>
+              <div class="member-picker" id="formMembers"></div>
+            </div>
+            <label class="span2"><span data-i18n="description">メモ・詳細</span><textarea name="description" rows="4"></textarea></label>
+          </div>
+        </form>
+        <aside class="materials" id="materialsPanel">
           <h3 data-i18n="materials">資料</h3>
           <ul id="dMaterials" class="material-list"></ul>
           <form id="uploadForm" class="material-form">
@@ -149,64 +173,16 @@
             <input type="text" id="linkName" data-i18n-placeholder="link_name" placeholder="リンク名 (任意)" />
             <button class="btn" type="submit" data-i18n="add_link">リンク追加</button>
           </form>
-        </div>
+        </aside>
       </div>
       <div class="modal-foot">
-        <button class="btn danger" id="btnDeleteEvent" data-i18n="delete">削除</button>
+        <button type="button" class="btn danger" id="btnDeleteEvent" data-i18n="delete">削除</button>
+        <button type="button" class="btn" id="btnCopyEvent" data-i18n="copy">⧉ コピー</button>
         <span class="spacer"></span>
-        <button class="btn" data-close data-i18n="close">閉じる</button>
-        <button class="btn" id="btnCopyEvent" data-i18n="copy">⧉ コピー</button>
-        <button class="btn primary" id="btnEditEvent" data-i18n="edit">編集</button>
+        <button type="button" class="btn" data-close data-i18n="close">閉じる</button>
+        <button type="submit" form="eventForm" class="btn primary" data-i18n="save">保存</button>
       </div>
     </div>
-  </div>
-
-  <!-- EVENT FORM -->
-  <div class="modal" id="eventModal" hidden>
-    <form class="modal-card wide" id="eventForm">
-      <div class="modal-head">
-        <h2 id="eventFormTitle" data-i18n="new_event_title">イベント追加</h2>
-        <button type="button" class="icon-btn" data-close>&times;</button>
-      </div>
-      <div class="form-grid">
-        <label class="span2"><span data-i18n="title_ja">タイトル (日本語)</span><input name="title" required /></label>
-        <label class="span2"><span data-i18n="title_en">Title (English)</span><input name="title_en" /></label>
-        <label><span data-i18n="type">種類</span><select name="type_id" id="formType" required></select></label>
-        <label><span data-i18n="status">状態</span>
-          <select name="status">
-            <option value="planned" data-i18n="status_planned">予定</option>
-            <option value="confirmed" data-i18n="status_confirmed">確定</option>
-            <option value="done" data-i18n="status_done">完了</option>
-            <option value="cancelled" data-i18n="status_cancelled">中止</option>
-          </select>
-        </label>
-        <label class="check span2"><input type="checkbox" name="all_day" id="formAllDay" /><span data-i18n="all_day">終日</span></label>
-        <label><span data-i18n="start">開始</span>
-          <div class="dt"><input type="date" name="start_date" required /><input type="time" name="start_time" /></div>
-        </label>
-        <label><span data-i18n="end">終了</span>
-          <div class="dt"><input type="date" name="end_date" /><input type="time" name="end_time" /></div>
-        </label>
-        <label><span data-i18n="input_tz">入力タイムゾーン</span>
-          <select name="timezone">
-            <option value="Asia/Tokyo">JST (日本 / Japan)</option>
-            <option value="Asia/Kolkata">IST (インド / India)</option>
-          </select>
-        </label>
-        <label><span data-i18n="location">場所</span><input name="location" /></label>
-        <label><span data-i18n="owner">主担当</span><select name="owner" id="formOwner"></select><small class="hint" data-i18n="owner_hint">人が未定なら所属 (日本側 / インド側) だけでも指定できます</small></label>
-        <div class="span2">
-          <span class="label" data-i18n="participants">関係メンバー</span>
-          <div class="member-picker" id="formMembers"></div>
-        </div>
-        <label class="span2"><span data-i18n="description">メモ・詳細</span><textarea name="description" rows="4"></textarea></label>
-      </div>
-      <div class="modal-foot">
-        <span class="spacer"></span>
-        <button type="button" class="btn" data-close data-i18n="cancel">キャンセル</button>
-        <button type="submit" class="btn primary" data-i18n="save">保存</button>
-      </div>
-    </form>
   </div>
 
   <!-- MEMBER FORM -->
