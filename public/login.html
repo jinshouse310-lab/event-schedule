@@ -4,11 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ログイン / Login - Biogas Events</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%E2%9A%A1%3C/text%3E%3C/svg%3E" />
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body class="login-body">
   <main class="login-card">
+    <img class="login-logo" src="/icon.svg" alt="" width="56" height="56" />
     <h1>バイオガス事業本部<br /><span class="sub">Biogas Division Event Schedule</span></h1>
     <p id="notice" class="error" hidden>パスコードが未設定です。Netlify の Site configuration → Environment variables で <code>APP_PASSCODE</code> を設定し、再デプロイしてください。<br /><span class="sub">Passcode is not configured. Set <code>APP_PASSCODE</code> in Netlify environment variables and redeploy.</span></p>
     <p id="prompt">共有パスコードを入力してください / Enter the shared passcode</p>

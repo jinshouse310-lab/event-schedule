@@ -16,7 +16,8 @@ input:focus, select:focus, textarea:focus { outline: 2px solid rgba(31,111,95,.3
 
 .topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; padding: .6rem 1rem; background: #fff; border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: .6rem; }
-.logo { font-size: 1.6rem; }
+.logo { width: 34px; height: 34px; display: block; }
+.login-logo { width: 56px; height: 56px; margin: 0 auto .6rem; display: block; }
 .brand-title { font-weight: 700; }
 .brand-sub { font-size: .78rem; color: var(--muted); }
 .tabs { display: flex; gap: .25rem; }
