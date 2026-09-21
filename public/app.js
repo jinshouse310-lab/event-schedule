@@ -197,35 +197,54 @@
     if (!list.length) { box.innerHTML = `<div class="empty">${esc(t('no_events'))}</div>`; return; }
     const groups = new Map();
     for (const ev of list) {
-      const k = eventDayKey(ev, state.tz);
+      const k = eventDayKey(ev, state.tz).slice(0, 7); // YYYY-MM
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k).push(ev);
     }
-    box.innerHTML = [...groups.entries()].map(([k, evs]) => `
-      <div class="day-group">
-        <div class="day-head">${esc(fmtDate(k))}</div>
-        ${evs.map(cardHtml).join('')}
-      </div>`).join('');
+    box.innerHTML = [...groups.entries()].map(([k, evs]) => {
+      const [y, m] = k.split('-').map(Number);
+      return `<div class="month-group"><div class="month-head">${esc(t('month_fmt')(y, m))}</div>${evs.map(cardHtml).join('')}</div>`;
+    }).join('');
+  }
+
+  // Date tile shown at the left of each card: "12月 / 17 / (木)", with the end day for multi-day events.
+  function dateTile(ev) {
+    const startKey = eventDayKey(ev, state.tz);
+    const endKey = ev.all_day ? (ev.end_at || ev.start_at).slice(0, 10) : ev.end_at ? dateKey(zonedParts(new Date(ev.end_at), state.tz)) : startKey;
+    const [y, m, d] = startKey.split('-').map(Number);
+    const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+    const wd = t('weekdays')[dow];
+    const todayKey = dateKey(zonedParts(new Date(), state.tz));
+    const cls = `date-tile ${dow === 0 ? 'sun' : dow === 6 ? 'sat' : ''} ${startKey === todayKey ? 'today' : ''}`;
+    const monthLabel = state.lang === 'ja' ? `${m}月` : new Date(Date.UTC(y, m - 1, d)).toLocaleString('en', { month: 'short', timeZone: 'UTC' });
+    let range = '';
+    if (endKey !== startKey) { const [, em, ed] = endKey.split('-').map(Number); range = `<span class="tile-range">→ ${em}/${ed}</span>`; }
+    return `<div class="${cls}"><span class="tile-month">${esc(monthLabel)}</span><span class="tile-day">${d}</span><span class="tile-wd">${esc(state.lang === 'ja' ? `(${wd})` : wd)}</span>${range}</div>`;
   }
 
   function cardHtml(ev) {
-    const members = ev.members.map((m) => `${sideBadge(m.side)} ${esc(memberName(m))}`);
+    const members = ev.members.map((m) => `<span class="member">${sideBadge(m.side)} ${esc(memberName(m))}</span>`);
+    const timeHtml = ev.all_day
+      ? `<span class="allday-tag">${esc(t('all_day'))}</span>${ev.end_at && ev.end_at.slice(0, 10) !== ev.start_at.slice(0, 10) ? ` <span class="alt">${esc(fmtRangeDates(ev))}</span>` : ''}`
+      : `<b>${esc(fmtTimes(ev, state.tz))} ${TZ_LABEL[state.tz]}</b> <span class="alt">${esc(fmtTimes(ev, OTHER_TZ[state.tz]))} ${TZ_LABEL[OTHER_TZ[state.tz]]}</span>`;
+    const materials = (ev.materials || []);
     return `
       <div class="event-card ${ev.status}" data-id="${ev.id}">
         <div class="bar" style="background:${ev.type_color}"></div>
-        <div>
-          <div><span class="type-badge" style="background:${ev.type_color}">${esc(typeLabel({ label_ja: ev.type_label_ja, label_en: ev.type_label_en }))}</span>
-            <span class="status-badge ${ev.status}">${esc(t('status_' + ev.status))}</span></div>
-          <div class="ev-title">${esc(evTitle(ev))}</div>
-          <div class="ev-meta">
-            <span>🕒 ${fmtWhen(ev, false)}</span>
-            ${ev.location ? `<span>📍 ${esc(ev.location)}</span>` : ''}
+        ${dateTile(ev)}
+        <div class="ev-body">
+          <div class="ev-head">
+            <span class="type-badge" style="background:${ev.type_color}">${esc(typeLabel({ label_ja: ev.type_label_ja, label_en: ev.type_label_en }))}</span>
+            <span class="ev-title">${esc(evTitle(ev))}</span>
+            <span class="status-badge ${ev.status}">${esc(t('status_' + ev.status))}</span>
           </div>
-          <div class="ev-meta ev-people">
-            <span class="ev-owner">${esc(t('owner'))}: ${ownerHtml(ev)}</span>
-            ${members.length ? `<span>👥 ${members.slice(0, 6).join(SEP())}${members.length > 6 ? ' ' + esc(t('more', { n: members.length - 6 })) : ''}</span>` : ''}
+          <div class="ev-grid">
+            <span class="k">${esc(t('when'))}</span><span class="v">${timeHtml}</span>
+            <span class="k">${esc(t('location'))}</span><span class="v">${ev.location ? esc(ev.location) : '<span class="alt">—</span>'}</span>
+            <span class="k">${esc(t('owner'))}</span><span class="v">${ownerHtml(ev)}</span>
+            <span class="k">${esc(t('participants_short'))}</span><span class="v">${members.length ? members.slice(0, 8).join(SEP()) + (members.length > 8 ? ' ' + esc(t('more', { n: members.length - 8 })) : '') : '<span class="alt">—</span>'}</span>
+            ${materials.length ? `<span class="k">${esc(t('materials'))}</span><span class="v ev-materials">${materials.map(materialChip).join('')}</span>` : ''}
           </div>
-          ${(ev.materials || []).length ? `<div class="ev-meta ev-materials">📎 ${ev.materials.map(materialChip).join('')}</div>` : ''}
         </div>
         <div class="ev-right">
           <div class="card-actions">
@@ -307,13 +326,23 @@
 
   // ---------- materials (inside the event dialog) ----------
   const materialHref = (m) => (m.kind === 'link' ? m.url : `/api/materials/${m.event_id}/${m.id}/download`);
-  const materialChip = (m) => `<a class="mat-chip" href="${esc(materialHref(m))}" target="_blank" rel="noopener" title="${esc(m.name)}">${m.kind === 'link' ? '🔗' : '📄'} ${esc(m.name)}</a>`;
+  const KNOWN_HOSTS = [['box.com', 'Box'], ['sharepoint.com', 'SharePoint'], ['onedrive.live.com', 'OneDrive'], ['1drv.ms', 'OneDrive'], ['drive.google.com', 'Google Drive'], ['docs.google.com', 'Google Docs'], ['dropbox.com', 'Dropbox'], ['teams.microsoft.com', 'Teams'], ['zoom.us', 'Zoom'], ['notion.so', 'Notion']];
+  // Links saved without a name would show a long URL; show the service or host name instead.
+  function materialLabel(m) {
+    if (m.kind !== 'link' || (m.name && m.name !== m.url && !/^https?:\/\//i.test(m.name))) return m.name;
+    try {
+      const host = new URL(m.url).hostname.replace(/^www\./, '');
+      const known = KNOWN_HOSTS.find(([h]) => host === h || host.endsWith('.' + h));
+      return known ? known[1] : host;
+    } catch { return m.name || m.url; }
+  }
+  const materialChip = (m) => `<a class="mat-chip" href="${esc(materialHref(m))}" target="_blank" rel="noopener" title="${esc(m.kind === 'link' ? m.url : m.name)}">${m.kind === 'link' ? '🔗' : '📄'} ${esc(materialLabel(m))}</a>`;
   function renderMaterials(list) {
     const ul = $('#dMaterials');
     if (!list.length) { ul.innerHTML = `<li class="m-meta">${esc(t('no_materials'))}</li>`; return; }
     ul.innerHTML = list.map((m) => `<li>
       <span>${m.kind === 'link' ? '🔗' : '📄'}</span>
-      <a class="m-name" href="${esc(materialHref(m))}" target="_blank" rel="noopener" title="${esc(m.name)}">${esc(m.name)}</a>
+      <a class="m-name" href="${esc(materialHref(m))}" target="_blank" rel="noopener" title="${esc(m.kind === 'link' ? m.url : m.name)}">${esc(materialLabel(m))}</a>
       <span class="m-meta">${m.kind === 'file' ? fmtSize(m.size) + ' · ' : ''}${esc(m.created_at.slice(0, 10))}${m.uploaded_by ? ' · ' + esc(m.uploaded_by) : ''}</span>
       <button type="button" class="icon-btn" data-del-material="${m.id}" title="${esc(t('delete'))}">&times;</button>
     </li>`).join('');
