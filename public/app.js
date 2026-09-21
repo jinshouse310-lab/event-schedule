@@ -134,13 +134,13 @@
     $('#fType').innerHTML = `<option value="">${esc(t('all_types'))}</option>${typeOpts}`;
     $('#fType').value = keep;
     $('#formType').innerHTML = typeOpts;
-    const keepOwner = $('#fOwner').value;
+    const keepMember = $('#fMember').value;
     const memberOpts = ['JP', 'IN'].map((side) =>
       `<optgroup label="${esc(t(side === 'JP' ? 'side_jp' : 'side_in'))}">` +
       state.members.filter((m) => m.side === side).map((m) => `<option value="${m.id}">${esc(memberName(m))}</option>`).join('') + '</optgroup>'
     ).join('');
-    $('#fOwner').innerHTML = `<option value="">${esc(t('all_owners'))}</option>${memberOpts}`;
-    $('#fOwner').value = keepOwner;
+    $('#fMember').innerHTML = `<option value="">${esc(t('all_members'))}</option>${memberOpts}`;
+    $('#fMember').value = keepMember;
     const ownerOpts = ['JP', 'IN'].map((side) =>
       `<optgroup label="${esc(t(side === 'JP' ? 'side_jp' : 'side_in'))}"><option value="side:${side}">${esc(t(side === 'JP' ? 'owner_side_jp' : 'owner_side_in'))}</option>` +
       state.members.filter((m) => m.side === side).map((m) => `<option value="${m.id}">${esc(memberLabel(m))}</option>`).join('') + '</optgroup>'
@@ -176,11 +176,12 @@
 
   function filteredEvents() {
     const q = $('#fSearch').value.trim().toLowerCase();
-    const type = $('#fType').value, side = $('#fSide').value, owner = $('#fOwner').value, status = $('#fStatus').value;
+    const type = $('#fType').value, side = $('#fSide').value, member = $('#fMember').value, status = $('#fStatus').value;
     const { from, to } = rangeBounds($('#fRange').value);
     return state.events.filter((ev) => {
       if (type && String(ev.type_id) !== type) return false;
-      if (owner && String(ev.owner_id) !== owner) return false;
+      // Member filter: matches events where the person is the owner or one of the involved members.
+      if (member && ev.owner_id !== member && !ev.members.some((m) => m.id === member)) return false;
       if (side && ev.owner_side !== side && !ev.members.some((m) => m.side === side)) return false;
       if (status && ev.status !== status) return false;
       if (from && evEnd(ev) < from) return false;
@@ -500,7 +501,7 @@
       state.tz = b.dataset.tz; localStorage.setItem('tz', state.tz); applyI18n(); state.calMonth = null; showView(state.view);
     });
     $('#btnNewEvent').addEventListener('click', () => openEventForm(null));
-    ['#fSearch', '#fType', '#fSide', '#fOwner', '#fRange', '#fStatus'].forEach((s) => $(s).addEventListener('input', renderList));
+    ['#fSearch', '#fType', '#fSide', '#fMember', '#fRange', '#fStatus'].forEach((s) => $(s).addEventListener('input', renderList));
     $('#eventList').addEventListener('click', async (e) => {
       const editBtn = e.target.closest('[data-edit]');
       if (editBtn) { e.stopPropagation(); openEventForm(await api(`/api/events/${editBtn.dataset.edit}`)); return; }

@@ -89,6 +89,11 @@ test('events: create, validate, filter, update, delete', async () => {
   assert.doesNotMatch(ics.text, /主担当: インド側/);
   assert.equal((await call('GET', '/api/events?side=JP')).body.length, 1);
   assert.equal((await call('GET', '/api/events?side=IN')).body.length, 1);
+  // member filter matches owner or involved member; owner filter matches owner only
+  assert.equal((await call('GET', `/api/events?member=${jp.id}`)).body.length, 1);
+  assert.equal((await call('GET', `/api/events?member=${ind.id}`)).body.length, 1);
+  assert.equal((await call('GET', `/api/events?owner=${ind.id}`)).body.length, 0);
+  assert.equal((await call('GET', '/api/events?member=nobody')).body.length, 0);
   assert.equal((await call('GET', '/api/events?from=2026-11-01T00:00:00Z')).body.length, 0);
   assert.equal((await call('GET', '/api/events?q=management')).body.length, 1);
   assert.equal((await call('GET', '/api/events')).body[0].materials_count, 0);

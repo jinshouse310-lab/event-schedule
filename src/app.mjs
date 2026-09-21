@@ -170,6 +170,7 @@ export function createHandler({ passcode = '', secret = '', maxUploadMb = 4 } = 
         if (to && ev.start_at >= to) return false;
         if (q.get('type') && ev.type_id !== q.get('type')) return false;
         if (q.get('owner') && ev.owner_id !== q.get('owner')) return false;
+        if (q.get('member') && ev.owner_id !== q.get('member') && !ev.members.some((m) => m.id === q.get('member'))) return false;
         if ((side === 'JP' || side === 'IN') && ev.owner_side !== side && !ev.members.some((m) => m.side === side)) return false;
         if (q.get('status') && STATUSES.has(q.get('status')) && ev.status !== q.get('status')) return false;
         if (text && ![ev.title, ev.title_en, ev.description, ev.location].some((s) => (s || '').toLowerCase().includes(text))) return false;
