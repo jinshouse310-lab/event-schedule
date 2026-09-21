@@ -114,6 +114,8 @@
   function errMsg(e) {
     if (e.message === 'file_too_large') return t('file_too_large', { mb: e.data?.maxUploadMb ?? state.config.maxUploadMb });
     if (e.message === 'end_before_start') return t('end_before_start');
+    if (e.message === 'secret_locked') return t('secret_locked_err');
+    if (e.message === 'bad_passcode') return t('secret_bad');
     return `${t('error')} (${e.message})`;
   }
 
@@ -124,6 +126,7 @@
     $$('[data-i18n-placeholder]').forEach((el) => { el.placeholder = t(el.dataset.i18nPlaceholder); });
     $$('#langToggle button').forEach((b) => b.classList.toggle('active', b.dataset.lang === state.lang));
     $$('#tzToggle button').forEach((b) => b.classList.toggle('active', b.dataset.tz === state.tz));
+    renderSecretButton();
     fillSelects();
   }
 
@@ -230,13 +233,14 @@
       : `<b>${esc(fmtTimes(ev, state.tz))} ${TZ_LABEL[state.tz]}</b> <span class="alt">${esc(fmtTimes(ev, OTHER_TZ[state.tz]))} ${TZ_LABEL[OTHER_TZ[state.tz]]}</span>`;
     const materials = (ev.materials || []);
     return `
-      <div class="event-card ${ev.status}" data-id="${ev.id}">
+      <div class="event-card ${ev.status} ${ev.confidential ? 'confidential' : ''}" data-id="${ev.id}">
         <div class="bar" style="background:${ev.type_color}"></div>
         ${dateTile(ev)}
         <div class="ev-body">
           <div class="ev-head">
             <span class="type-badge" style="background:${ev.type_color}">${esc(typeLabel({ label_ja: ev.type_label_ja, label_en: ev.type_label_en }))}</span>
             <span class="ev-title">${esc(evTitle(ev))}</span>
+            ${ev.confidential ? `<span class="secret-badge">🔒 ${esc(t('secret_badge'))}</span>` : ''}
             <span class="status-badge ${ev.status}">${esc(t('status_' + ev.status))}</span>
           </div>
           <div class="ev-grid">
@@ -293,7 +297,7 @@
       const evs = byDay.get(k) || [];
       cells.push(`<div class="cal-cell ${other ? 'other' : ''} ${k === todayKey ? 'today' : ''} ${dow === 0 ? 'sun' : dow === 6 ? 'sat' : ''}">
         <span class="cal-day">${d.getUTCDate()}</span>
-        ${evs.map((ev) => `<span class="cal-ev ${ev.status}" data-id="${ev.id}" style="background:${ev.type_color}" title="${esc(evTitle(ev))} / ${esc(ownerName(ev))}">${ev.all_day ? '' : esc(timeStr(zonedParts(new Date(ev.start_at), state.tz))) + ' '}${esc(evTitle(ev))}</span>`).join('')}
+        ${evs.map((ev) => `<span class="cal-ev ${ev.status}" data-id="${ev.id}" style="background:${ev.type_color}" title="${esc(evTitle(ev))} / ${esc(ownerName(ev))}">${ev.confidential ? '🔒 ' : ''}${ev.all_day ? '' : esc(timeStr(zonedParts(new Date(ev.start_at), state.tz))) + ' '}${esc(evTitle(ev))}</span>`).join('')}
       </div>`);
     }
     $('#calGrid').innerHTML = cells.join('');
@@ -386,6 +390,7 @@
     setDialogMode();
     if (ev) {
       f.title.value = ev.title; f.title_en.value = ev.title_en; f.type_id.value = ev.type_id; f.status.value = copy ? 'planned' : ev.status;
+      f.confidential.checked = Boolean(ev.confidential);
       f.all_day.checked = ev.all_day; f.timezone.value = ev.timezone; f.location.value = ev.location; f.owner.value = ev.owner_id || (ev.owner_side ? `side:${ev.owner_side}` : '');
       f.description.value = ev.description;
       if (ev.all_day) {
@@ -413,6 +418,7 @@
   // Existing event: form + materials panel + delete/copy. New event: form only.
   function setDialogMode() {
     const existing = Boolean(state.editingEvent);
+    $('#confidentialRow').hidden = !state.config.secretUnlocked;
     $('#materialsPanel').hidden = !existing;
     $('#editLayout').classList.toggle('single', !existing);
     $('#btnDeleteEvent').hidden = !existing;
@@ -443,6 +449,7 @@
       owner_id: f.owner.value && !f.owner.value.startsWith('side:') ? f.owner.value : null,
       owner_side: f.owner.value.startsWith('side:') ? f.owner.value.slice(5) : null,
       description: f.description.value,
+      ...(state.config.secretUnlocked ? { confidential: f.confidential.checked } : {}),
       member_ids: $$('input[name=member_ids]:checked', f).map((cb) => cb.value),
     };
     if (allDay) {
@@ -519,6 +526,29 @@
     } catch (err) { toast(errMsg(err), true); }
   }
 
+  // ---------- confidential unlock ----------
+  function renderSecretButton() {
+    const b = $('#btnSecret');
+    b.hidden = !state.config.secretConfigured;
+    b.textContent = t(state.config.secretUnlocked ? 'secret_lock' : 'secret_unlock');
+    b.classList.toggle('active', Boolean(state.config.secretUnlocked));
+  }
+  async function toggleSecret() {
+    try {
+      if (state.config.secretUnlocked) {
+        await api('/api/secret/logout', { method: 'POST' });
+        toast(t('secret_locked'));
+      } else {
+        const pass = prompt(t('secret_prompt'));
+        if (pass === null) return;
+        await api('/api/secret/login', { method: 'POST', body: json({ passcode: pass }) });
+        toast(t('secret_unlocked'));
+      }
+      await refreshAll();
+      renderSecretButton();
+    } catch (err) { toast(errMsg(err), true); }
+  }
+
   // ---------- view switching ----------
   async function showView(view) {
     state.view = view;
@@ -548,6 +578,7 @@
       state.tz = b.dataset.tz; localStorage.setItem('tz', state.tz); applyI18n(); state.calMonth = null; showView(state.view);
     });
     $('#btnNewEvent').addEventListener('click', () => openEventForm(null));
+    $('#btnSecret').addEventListener('click', toggleSecret);
     ['#fSearch', '#fType', '#fSide', '#fMember', '#fRange', '#fStatus'].forEach((s) => $(s).addEventListener('input', renderList));
     $('#eventList').addEventListener('click', (e) => {
       if (e.target.closest('a')) return; // material links open directly

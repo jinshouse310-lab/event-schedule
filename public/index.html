@@ -27,6 +27,7 @@
         <button data-tz="Asia/Tokyo" class="active">JST</button>
         <button data-tz="Asia/Kolkata">IST</button>
       </div>
+      <button class="btn" id="btnSecret" hidden></button>
       <div class="seg" id="langToggle" title="Language">
         <button data-lang="ja" class="active">日本語</button>
         <button data-lang="en">EN</button>
@@ -137,6 +138,7 @@
               </select>
             </label>
             <label class="check span2"><input type="checkbox" name="all_day" id="formAllDay" /><span data-i18n="all_day">終日</span></label>
+            <label class="check span2 secret-row" id="confidentialRow" hidden><input type="checkbox" name="confidential" /><span data-i18n="confidential">🔒 極秘 (極秘パスコードを持つ人にだけ表示)</span></label>
             <label><span data-i18n="start">開始</span>
               <div class="dt"><input type="date" name="start_date" required /><input type="time" name="start_time" /></div>
             </label>

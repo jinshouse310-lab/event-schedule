@@ -27,7 +27,7 @@ const safeEq = (a, b) => { const x = Buffer.from(a), y = Buffer.from(b); return 
  * Creates a fetch-style handler `(Request) => Promise<Response>` used by both the
  * Netlify Function and the local dev server.
  */
-export function createHandler({ passcode = '', secret = '', maxUploadMb = 4 } = {}) {
+export function createHandler({ passcode = '', secret = '', secretPasscode = '', maxUploadMb = 4 } = {}) {
   // Access is always passcode-protected. Without APP_PASSCODE the app refuses to serve data
   // instead of silently becoming public.
   const configured = Boolean(passcode);
@@ -39,6 +39,16 @@ export function createHandler({ passcode = '', secret = '', maxUploadMb = 4 } = 
   maxUploadMb = Number(maxUploadMb) || 4;
 
   const hasCookie = (req) => configured && safeEq(parseCookies(req.headers.get('cookie'))[COOKIE] || '', token);
+  // Confidential events: a second passcode (SECRET_PASSCODE) unlocks them. Without it they do not
+  // exist as far as the API is concerned (filtered from lists, 404 on direct access, never in ICS).
+  const SECRET_COOKIE = 'bgsecret';
+  const secretConfigured = Boolean(secretPasscode);
+  const secretToken = secretConfigured ? createHmac('sha256', secret).update('secret:' + secretPasscode).digest('base64url') : '';
+  const hasSecret = (req) => secretConfigured && safeEq(parseCookies(req.headers.get('cookie'))[SECRET_COOKIE] || '', secretToken);
+  async function visibleEvent(store, id, canSecret) {
+    const ev = await store.getDoc('events', id);
+    return ev && (!ev.confidential || canSecret) ? ev : null;
+  }
   const hasIcsKey = (url) => configured && safeEq(url.searchParams.get('key') || '', icsKey);
 
   async function readJson(req) {
@@ -146,6 +156,7 @@ export function createHandler({ passcode = '', secret = '', maxUploadMb = 4 } = 
     const side = b.owner_side !== undefined ? b.owner_side : cur?.owner_side;
     out.owner_side = out.owner_id ? null : (side === 'JP' || side === 'IN' ? side : null);
     out.status = b.status !== undefined ? String(b.status) : cur?.status ?? 'planned';
+    out.confidential = b.confidential !== undefined ? Boolean(b.confidential) : Boolean(cur?.confidential);
     if (!STATUSES.has(out.status)) return { error: 'invalid_status' };
     if (b.member_ids !== undefined) {
       if (!Array.isArray(b.member_ids)) return { error: 'invalid_members' };
@@ -155,6 +166,7 @@ export function createHandler({ passcode = '', secret = '', maxUploadMb = 4 } = 
   }
 
   async function eventHandlers(store, req, id, url) {
+    const canSecret = hasSecret(req);
     const [types, members] = await Promise.all([store.getTypes(), store.getMembers()]);
     if (req.method === 'GET' && !id) {
       const q = url.searchParams;
@@ -167,6 +179,7 @@ export function createHandler({ passcode = '', secret = '', maxUploadMb = 4 } = 
       const text = str(q.get('q')).toLowerCase();
       const side = q.get('side');
       const list = events.map((ev) => ({ ...decorate(ev, types, members), materials: byEvent[ev.id] || [], materials_count: (byEvent[ev.id] || []).length })).filter((ev) => {
+        if (ev.confidential && !canSecret) return false;
         if (from && (ev.end_at || ev.start_at) < from) return false;
         if (to && ev.start_at >= to) return false;
         if (q.get('type') && ev.type_id !== q.get('type')) return false;
@@ -184,6 +197,7 @@ export function createHandler({ passcode = '', secret = '', maxUploadMb = 4 } = 
       const b = await readJson(req); if (!b) return err('invalid_json', 400);
       const { error, value } = await validateEvent(b, null, types, members);
       if (error) return err(error, 400);
+      if (value.confidential && !canSecret) return err('secret_locked', 403);
       const ev = { id: newId(), ...value, created_at: nowIso(), updated_at: nowIso() };
       await store.putDoc('events', ev.id, ev);
       return json(await loadEvent(store, ev.id, types, members), 201);
@@ -191,13 +205,14 @@ export function createHandler({ passcode = '', secret = '', maxUploadMb = 4 } = 
     if (!id) return err('not_found', 404);
     if (req.method === 'GET') {
       const ev = await loadEvent(store, id, types, members);
-      return ev ? json(ev) : err('not_found', 404);
+      return ev && (!ev.confidential || canSecret) ? json(ev) : err('not_found', 404);
     }
-    const cur = await store.getDoc('events', id); if (!cur) return err('not_found', 404);
+    const cur = await visibleEvent(store, id, canSecret); if (!cur) return err('not_found', 404);
     if (req.method === 'PUT') {
       const b = await readJson(req); if (!b) return err('invalid_json', 400);
       const { error, value } = await validateEvent(b, cur, types, members);
       if (error) return err(error, 400);
+      if (value.confidential && !canSecret) return err('secret_locked', 403);
       await store.putDoc('events', id, { ...cur, ...value, updated_at: nowIso() });
       return json(await loadEvent(store, id, types, members));
     }
@@ -212,7 +227,7 @@ export function createHandler({ passcode = '', secret = '', maxUploadMb = 4 } = 
 
   // ---------- materials ----------
   async function uploadHandler(store, req, eventId) {
-    if (!(await store.getDoc('events', eventId))) return err('event_not_found', 404);
+    if (!(await visibleEvent(store, eventId, hasSecret(req)))) return err('event_not_found', 404);
     let form;
     try { form = await req.formData(); } catch { return err('invalid_form', 400); }
     const file = form.get('file');
@@ -226,7 +241,7 @@ export function createHandler({ passcode = '', secret = '', maxUploadMb = 4 } = 
     return json(m, 201);
   }
   async function linkHandler(store, req, eventId) {
-    if (!(await store.getDoc('events', eventId))) return err('event_not_found', 404);
+    if (!(await visibleEvent(store, eventId, hasSecret(req)))) return err('event_not_found', 404);
     const b = await readJson(req); if (!b) return err('invalid_json', 400);
     const link = str(b.url);
     if (!/^https?:\/\//i.test(link)) return err('invalid_url', 400);
@@ -234,7 +249,8 @@ export function createHandler({ passcode = '', secret = '', maxUploadMb = 4 } = 
     await store.putDoc('materials', `${eventId}/${m.id}`, m);
     return json(m, 201);
   }
-  async function downloadHandler(store, url, eventId, id) {
+  async function downloadHandler(store, req, url, eventId, id) {
+    if (!(await visibleEvent(store, eventId, hasSecret(req)))) return err('not_found', 404);
     const key = `${eventId}/${id}`;
     const m = await store.getDoc('materials', key);
     if (!m || m.kind !== 'file') return err('not_found', 404);
@@ -248,7 +264,8 @@ export function createHandler({ passcode = '', secret = '', maxUploadMb = 4 } = 
       'cache-control': 'private, max-age=0',
     } });
   }
-  async function deleteMaterial(store, eventId, id) {
+  async function deleteMaterial(store, req, eventId, id) {
+    if (!(await visibleEvent(store, eventId, hasSecret(req)))) return err('not_found', 404);
     const key = `${eventId}/${id}`;
     const m = await store.getDoc('materials', key);
     if (!m) return err('not_found', 404);
@@ -272,10 +289,10 @@ export function createHandler({ passcode = '', secret = '', maxUploadMb = 4 } = 
     const method = req.method;
 
     try {
-      if (seg[0] === 'auth' && method === 'GET') return json({ required: true, configured, authed: hasCookie(req) });
+      if (seg[0] === 'auth' && method === 'GET') return json({ required: true, configured, authed: hasCookie(req), secretConfigured, secretUnlocked: hasSecret(req) });
       if (seg[0] === 'config' && method === 'GET') {
         const authed = hasCookie(req);
-        return json({ maxUploadMb, authRequired: true, configured, authed, icsKey: authed ? icsKey : undefined });
+        return json({ maxUploadMb, authRequired: true, configured, authed, icsKey: authed ? icsKey : undefined, secretConfigured, secretUnlocked: authed && hasSecret(req) });
       }
       if (!configured) return err('passcode_not_configured', 503);
       if (seg[0] === 'login' && method === 'POST') {
@@ -288,10 +305,21 @@ export function createHandler({ passcode = '', secret = '', maxUploadMb = 4 } = 
       const isIcs = seg[0] === 'calendar.ics' && method === 'GET';
       if (!hasCookie(req) && !(isIcs && hasIcsKey(url))) return err('unauthorized', 401);
 
+      if (seg[0] === 'secret' && seg[1] === 'login' && method === 'POST') {
+        if (!hasCookie(req)) return err('unauthorized', 401);
+        if (!secretConfigured) return err('secret_not_configured', 503);
+        const b = await readJson(req);
+        if (!b || !safeEq(String(b.passcode || ''), secretPasscode)) return err('bad_passcode', 403);
+        const secure = url.protocol === 'https:' || req.headers.get('x-forwarded-proto') === 'https';
+        return json({ ok: true }, 200, { 'set-cookie': `${SECRET_COOKIE}=${encodeURIComponent(secretToken)}; Path=/; HttpOnly; SameSite=Lax;${secure ? ' Secure;' : ''} Max-Age=${60 * 60 * 12}` });
+      }
+      if (seg[0] === 'secret' && seg[1] === 'logout' && method === 'POST') return json({ ok: true }, 200, { 'set-cookie': `${SECRET_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0` });
+
       const store = createStore();
       if (seg[0] === 'calendar.ics' && method === 'GET') {
         const [types, members, events] = await Promise.all([store.getTypes(), store.getMembers(), store.listDocs('events')]);
-        const body = buildIcs(events.map((e) => decorate(e, types, members)), url.searchParams.get('lang') === 'en' ? 'en' : 'ja');
+        // Confidential events never go into calendar feeds (subscriptions cannot be unlocked per person).
+        const body = buildIcs(events.filter((e) => !e.confidential).map((e) => decorate(e, types, members)), url.searchParams.get('lang') === 'en' ? 'en' : 'ja');
         return new Response(body, { headers: { 'content-type': 'text/calendar; charset=utf-8', 'content-disposition': 'inline; filename="biogas-events.ics"' } });
       }
       if (seg[0] === 'members' && seg.length <= 2) return memberHandlers(store, req, seg[1], url);
@@ -301,8 +329,8 @@ export function createHandler({ passcode = '', secret = '', maxUploadMb = 4 } = 
         if (seg[3] === 'upload') return uploadHandler(store, req, seg[1]);
         if (seg[3] === 'link') return linkHandler(store, req, seg[1]);
       }
-      if (seg[0] === 'materials' && seg.length === 4 && seg[3] === 'download' && method === 'GET') return downloadHandler(store, url, seg[1], seg[2]);
-      if (seg[0] === 'materials' && seg.length === 3 && method === 'DELETE') return deleteMaterial(store, seg[1], seg[2]);
+      if (seg[0] === 'materials' && seg.length === 4 && seg[3] === 'download' && method === 'GET') return downloadHandler(store, req, url, seg[1], seg[2]);
+      if (seg[0] === 'materials' && seg.length === 3 && method === 'DELETE') return deleteMaterial(store, req, seg[1], seg[2]);
       return err('not_found', 404);
     } catch (e) {
       console.error(e);

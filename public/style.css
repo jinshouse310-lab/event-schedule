@@ -78,6 +78,10 @@ input:focus, select:focus, textarea:focus { outline: 2px solid rgba(31,111,95,.3
 .ev-right { display: flex; flex-direction: column; gap: .3rem; align-items: flex-end; }
 .type-badge { display: inline-block; padding: .1rem .55rem; border-radius: 999px; color: #fff; font-size: .78rem; font-weight: 600; white-space: nowrap; }
 .side-badge { display: inline-block; padding: 0 .35rem; border-radius: 4px; font-size: .68rem; font-weight: 600; vertical-align: middle; border: 1px solid var(--in); color: var(--in); background: #fff; }
+.secret-badge { display: inline-block; padding: 0 .5rem; border-radius: 4px; font-size: .78rem; font-weight: 700; background: #7b241c; color: #fff; }
+.event-card.confidential { background: #fff8f6; }
+.secret-row { color: #7b241c; font-weight: 600; }
+#btnSecret.active { background: #7b241c; border-color: #7b241c; color: #fff; }
 .status-badge { display: inline-block; padding: 0 .5rem; border-radius: 4px; font-size: .78rem; border: 1px solid var(--line); }
 .status-badge.confirmed { border-color: var(--primary); color: var(--primary); }
 .status-badge.done { background: #eee; }

@@ -46,7 +46,7 @@ function serveStatic(res, file) {
 
 async function main() {
   await startLocalBlobs(path.join(DATA_DIR, 'blobs'));
-  const handler = createHandler({ passcode: process.env.APP_PASSCODE || '', secret: process.env.SESSION_SECRET || '', maxUploadMb: process.env.MAX_UPLOAD_MB || 50 });
+  const handler = createHandler({ passcode: process.env.APP_PASSCODE || '', secret: process.env.SESSION_SECRET || '', secretPasscode: process.env.SECRET_PASSCODE || '', maxUploadMb: process.env.MAX_UPLOAD_MB || 50 });
   http.createServer(async (req, res) => {
     const pathname = new URL(req.url, 'http://x').pathname;
     try {

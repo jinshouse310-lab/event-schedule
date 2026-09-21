@@ -162,7 +162,7 @@ test('passcode auth: unconfigured refuses, login sets cookie, ICS key works with
   const r503 = await none(new Request('http://localhost/api/events'));
   assert.equal(r503.status, 503); assert.equal((await r503.json()).error, 'passcode_not_configured');
   const authInfo = await (await none(new Request('http://localhost/api/auth'))).json();
-  assert.deepEqual(authInfo, { required: true, configured: false, authed: false });
+  assert.deepEqual(authInfo, { required: true, configured: false, authed: false, secretConfigured: false, secretUnlocked: false });
   assert.equal((await none(new Request('http://localhost/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"passcode":"x"}' }))).status, 503);
 
   const h = createHandler({ passcode: 'secret123' }); // no SESSION_SECRET: derived from passcode
@@ -181,7 +181,7 @@ test('passcode auth: unconfigured refuses, login sets cookie, ICS key works with
   const ck = ok.headers.get('set-cookie').split(';')[0];
   assert.doesNotMatch(ok.headers.get('set-cookie'), /Secure/);
   assert.equal((await c('GET', '/api/events', null, { cookie: ck })).status, 200);
-  assert.deepEqual(await (await c('GET', '/api/auth', null, { cookie: ck })).json(), { required: true, configured: true, authed: true });
+  assert.deepEqual(await (await c('GET', '/api/auth', null, { cookie: ck })).json(), { required: true, configured: true, authed: true, secretConfigured: false, secretUnlocked: false });
   const cfg = await (await c('GET', '/api/config', null, { cookie: ck })).json();
   assert.ok(cfg.icsKey && cfg.icsKey.length >= 20);
   // Same passcode in a fresh handler instance (new function invocation) yields the same cookie and key.
@@ -195,4 +195,51 @@ test('passcode auth: unconfigured refuses, login sets cookie, ICS key works with
   // Changing the passcode invalidates old cookies.
   const h3 = createHandler({ passcode: 'rotated' });
   assert.equal((await h3(new Request('http://localhost/api/events', { headers: { cookie: ck } }))).status, 401);
+});
+
+test('confidential events are visible only with the confidential passcode', async () => {
+  const h = createHandler({ passcode: 'team', secretPasscode: 'top-secret' });
+  const c = async (method, url, body, headers = {}) => {
+    const init = { method, headers: { ...headers } };
+    if (body) { init.body = JSON.stringify(body); init.headers['content-type'] = 'application/json'; }
+    const res = await h(new Request('http://localhost' + url, init));
+    const text = await res.text(); let j = null; try { j = JSON.parse(text); } catch {}
+    return { status: res.status, body: j, text, headers: res.headers };
+  };
+  const login = await c('POST', '/api/login', { passcode: 'team' });
+  const base = login.headers.get('set-cookie').split(';')[0];
+  assert.equal((await c('GET', '/api/auth', null, { cookie: base })).body.secretUnlocked, false);
+  assert.equal((await c('POST', '/api/secret/login', { passcode: 'nope' }, { cookie: base })).status, 403);
+  assert.equal((await c('POST', '/api/secret/login', { passcode: 'top-secret' })).status, 401); // needs site login first
+  const sl = await c('POST', '/api/secret/login', { passcode: 'top-secret' }, { cookie: base });
+  assert.equal(sl.status, 200);
+  const both = base + '; ' + sl.headers.get('set-cookie').split(';')[0];
+  assert.equal((await c('GET', '/api/auth', null, { cookie: both })).body.secretUnlocked, true);
+
+  const types = (await c('GET', '/api/types', null, { cookie: base })).body;
+  // locked users cannot create confidential events
+  assert.equal((await c('POST', '/api/events', { title: 'x', type_id: types[0].id, start_at: '2027-05-01T00:00:00Z', confidential: true }, { cookie: base })).status, 403);
+  const sec = await c('POST', '/api/events', { title: '極秘 M&A', type_id: types[0].id, start_at: '2027-05-01T01:00:00Z', confidential: true }, { cookie: both });
+  assert.equal(sec.status, 201); assert.equal(sec.body.confidential, true);
+  const link = await c('POST', `/api/events/${sec.body.id}/materials/link`, { url: 'https://example.com/secret' }, { cookie: both });
+  assert.equal(link.status, 201);
+
+  // without the secret cookie the event does not exist anywhere
+  assert.ok(!(await c('GET', '/api/events', null, { cookie: base })).body.some((e) => e.id === sec.body.id));
+  assert.equal((await c('GET', `/api/events/${sec.body.id}`, null, { cookie: base })).status, 404);
+  assert.equal((await c('PUT', `/api/events/${sec.body.id}`, { title: 'hack' }, { cookie: base })).status, 404);
+  assert.equal((await c('DELETE', `/api/events/${sec.body.id}`, null, { cookie: base })).status, 404);
+  assert.equal((await c('POST', `/api/events/${sec.body.id}/materials/link`, { url: 'https://a.b' }, { cookie: base })).status, 404);
+  assert.equal((await c('DELETE', `/api/materials/${sec.body.id}/${link.body.id}`, null, { cookie: base })).status, 404);
+  assert.doesNotMatch((await c('GET', '/calendar.ics', null, { cookie: both })).text, /M&A/);
+  // with it, everything works; locking again hides it
+  assert.ok((await c('GET', '/api/events', null, { cookie: both })).body.some((e) => e.id === sec.body.id));
+  assert.equal((await c('PUT', `/api/events/${sec.body.id}`, { location: '本社' }, { cookie: both })).status, 200);
+  const out = await c('POST', '/api/secret/logout', null, { cookie: both });
+  assert.match(out.headers.get('set-cookie'), /Max-Age=0/);
+  // handler without SECRET_PASSCODE: confidential events stay hidden from everyone
+  const h2 = createHandler({ passcode: 'team' });
+  const r = await h2(new Request('http://localhost/api/events', { headers: { cookie: both } }));
+  assert.ok(!(await r.json()).some((e) => e.id === sec.body.id));
+  assert.equal((await c('DELETE', `/api/events/${sec.body.id}`, null, { cookie: both })).status, 200);
 });

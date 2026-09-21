@@ -3,6 +3,7 @@ import { createHandler } from '../../src/app.mjs';
 const handler = createHandler({
   passcode: process.env.APP_PASSCODE || '',
   secret: process.env.SESSION_SECRET || '',
+  secretPasscode: process.env.SECRET_PASSCODE || '',
   maxUploadMb: process.env.MAX_UPLOAD_MB || 4,
 });
 
