@@ -28,6 +28,7 @@ export function createStore() {
     events: getStore({ name: 'events', ...opts }),
     materials: getStore({ name: 'materials', ...opts }),
     files: getStore({ name: 'files', ...opts }),
+    settings: getStore({ name: 'settings', ...opts }),
   };
 
   async function listKeys(name, prefix) {

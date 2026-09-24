@@ -15,13 +15,14 @@ function fold(line) {
 }
 
 /** iCalendar feed so members can subscribe from Outlook / Google Calendar. */
-export function buildIcs(events, lang = 'ja') {
+export function buildIcs(events, lang = 'ja', sides = null) {
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Biogas Division//Event Schedule//JA', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:Biogas Division Events'];
   const sorted = events.filter((e) => e.status !== 'cancelled').sort((a, b) => a.start_at.localeCompare(b.start_at));
   for (const e of sorted) {
     const typeLabel = lang === 'en' ? e.type_label_en : e.type_label_ja;
     const title = lang === 'en' && e.title_en ? e.title_en : e.title;
     const sideLabel = { JP: lang === 'en' ? 'Japan side' : '日本側', IN: lang === 'en' ? 'India side' : 'インド側' };
+    if (sides) for (const k of ['JP', 'IN']) if (sides[k]) sideLabel[k] = lang === 'en' ? sides[k].label_en : sides[k].label_ja;
     const owner = e.owner_id ? (lang === 'en' && e.owner_name_en ? e.owner_name_en : e.owner_name) : sideLabel[e.owner_side] || '';
     lines.push('BEGIN:VEVENT', `UID:event-${e.id}@biogas-schedule`, `DTSTAMP:${icsDate(e.updated_at || e.created_at)}`);
     if (e.all_day) {

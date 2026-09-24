@@ -19,6 +19,7 @@
     <nav class="tabs" id="tabs">
       <button class="tab active" data-view="list" data-i18n="nav_list">一覧</button>
       <button class="tab" data-view="calendar" data-i18n="nav_calendar">カレンダー</button>
+      <button class="tab" data-view="gantt" data-i18n="nav_gantt">ガント</button>
       <button class="tab" data-view="members" data-i18n="nav_members">メンバー</button>
       <button class="tab" data-view="settings" data-i18n="nav_settings">設定</button>
     </nav>
@@ -44,8 +45,8 @@
         <select id="fType"><option value="" data-i18n="all_types">すべての種類</option></select>
         <select id="fSide">
           <option value="" data-i18n="all_sides">日本・インド</option>
-          <option value="JP" data-i18n="side_jp">日本側</option>
-          <option value="IN" data-i18n="side_in">インド側</option>
+          <option value="JP" data-side-label="JP">日本側</option>
+          <option value="IN" data-side-label="IN">インド側</option>
         </select>
         <select id="fMember"><option value="" data-i18n="all_members">すべてのメンバー</option></select>
         <select id="fRange">
@@ -77,6 +78,23 @@
       <div class="cal-grid" id="calGrid"></div>
     </section>
 
+    <!-- GANTT VIEW -->
+    <section id="view-gantt" class="view" hidden>
+      <div class="cal-header">
+        <button class="btn" id="ganttPrev">‹</button>
+        <h2 id="ganttTitle"></h2>
+        <button class="btn" id="ganttNext">›</button>
+        <button class="btn" id="ganttToday" data-i18n="today">今日</button>
+        <select id="ganttSpan" class="span-select">
+          <option value="1" data-i18n="span_1">1か月</option>
+          <option value="3" selected data-i18n="span_3">3か月</option>
+          <option value="6" data-i18n="span_6">6か月</option>
+        </select>
+        <span class="hint gantt-hint" data-i18n="gantt_hint">帯をドラッグで日程移動、右端で終了日変更、クリックで編集</span>
+      </div>
+      <div class="gantt" id="gantt"></div>
+    </section>
+
     <!-- MEMBERS VIEW -->
     <section id="view-members" class="view" hidden>
       <div class="section-head">
@@ -85,11 +103,11 @@
       </div>
       <div class="two-col">
         <div>
-          <h3 data-i18n="side_jp">日本側</h3>
+          <h3 data-side-label="JP">日本側</h3>
           <table class="table" id="membersJP"></table>
         </div>
         <div>
-          <h3 data-i18n="side_in">インド側</h3>
+          <h3 data-side-label="IN">インド側</h3>
           <table class="table" id="membersIN"></table>
         </div>
       </div>
@@ -102,6 +120,13 @@
         <button class="btn primary" id="btnNewType" data-i18n="add_type">＋ 種類を追加</button>
       </div>
       <table class="table" id="typesTable"></table>
+
+      <h2 data-i18n="sides_title">区分名 (日本側 / インド側)</h2>
+      <p class="hint" data-i18n="sides_help">メンバーや主担当の区分名を変更できます。略称はインド側のバッジに使われます。</p>
+      <form id="sidesForm" class="sides-form">
+        <table class="table" id="sidesTable"></table>
+        <button type="submit" class="btn primary" data-i18n="save">保存</button>
+      </form>
 
       <h2 data-i18n="ics_title">カレンダー連携 (Outlook / Google カレンダー)</h2>
       <p data-i18n="ics_help">以下の URL を「カレンダーの購読」に登録すると、各自のカレンダーに自動で同期されます。</p>
@@ -199,8 +224,8 @@
         <label><span data-i18n="name_en">Name (English)</span><input name="name_en" /></label>
         <label><span data-i18n="side">拠点</span>
           <select name="side">
-            <option value="JP" data-i18n="side_jp">日本側</option>
-            <option value="IN" data-i18n="side_in">インド側</option>
+            <option value="JP" data-side-label="JP">日本側</option>
+            <option value="IN" data-side-label="IN">インド側</option>
           </select>
         </label>
         <label><span data-i18n="dept">所属 (部署・会社)</span><input name="dept" /></label>

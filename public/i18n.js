@@ -3,7 +3,9 @@ window.I18N = {
   ja: {
     app_title: 'バイオガス事業本部 イベントスケジュール',
     app_sub: '日本 × インド 共有カレンダー',
-    nav_list: '一覧', nav_calendar: 'カレンダー', nav_members: 'メンバー', nav_settings: '設定',
+    nav_list: '一覧', nav_calendar: 'カレンダー', nav_gantt: 'ガント', nav_members: 'メンバー', nav_settings: '設定',
+    span_1: '1か月', span_3: '3か月', span_6: '6か月', gantt_hint: '帯をドラッグで日程移動、右端で終了日変更、クリックで編集', gantt_moved: '日程を変更しました', no_events_range: 'この期間にイベントはありません',
+    sides_title: '区分名 (日本側 / インド側)', sides_help: 'メンバーや主担当の区分名を変更できます。略称はインド側のバッジに使われます。', side_key: '区分', side_short: '略称 (バッジ)', person_tbd: '担当者未定',
     new_event: '＋ イベント追加', new_event_title: 'イベント追加', edit_event_title: 'イベント編集', copy_event_title: 'イベントをコピーして追加', copy: 'コピー',
     search_placeholder: 'タイトル・場所・メモを検索...',
     all_types: 'すべての種類', all_sides: '日本・インド', side_jp: '日本側', side_in: 'インド側',
@@ -41,7 +43,9 @@ window.I18N = {
   en: {
     app_title: 'Biogas Division Event Schedule',
     app_sub: 'Japan × India shared calendar',
-    nav_list: 'List', nav_calendar: 'Calendar', nav_members: 'Members', nav_settings: 'Settings',
+    nav_list: 'List', nav_calendar: 'Calendar', nav_gantt: 'Timeline', nav_members: 'Members', nav_settings: 'Settings',
+    span_1: '1 month', span_3: '3 months', span_6: '6 months', gantt_hint: 'Drag a bar to move it, drag its right edge to change the end, click to edit', gantt_moved: 'Dates updated', no_events_range: 'No events in this period',
+    sides_title: 'Side names (Japan / India)', sides_help: 'Rename the two sides used for members and owners. The short name is used for the India-side badge.', side_key: 'Side', side_short: 'Short (badge)', person_tbd: 'person TBD',
     new_event: '+ New event', new_event_title: 'New event', edit_event_title: 'Edit event', copy_event_title: 'Copy as new event', copy: 'Copy',
     search_placeholder: 'Search title, location, notes...',
     all_types: 'All types', all_sides: 'Japan & India', side_jp: 'Japan', side_in: 'India',

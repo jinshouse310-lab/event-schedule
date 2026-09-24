@@ -3,6 +3,17 @@ import { createStore, newId, nowIso } from './store.mjs';
 import { buildIcs } from './ics.mjs';
 
 const COOKIE = 'bgsched';
+// Editable names for the two sides (区分). Stored in the settings store under "sides".
+const DEFAULT_SIDES = {
+  JP: { label_ja: '日本側', label_en: 'Japan', short: 'JP' },
+  IN: { label_ja: 'インド側', label_en: 'India', short: 'IN' },
+};
+async function getSettings(store) {
+  const saved = (await store.getDoc('settings', 'sides')) || {};
+  const sides = {};
+  for (const k of ['JP', 'IN']) sides[k] = { ...DEFAULT_SIDES[k], ...(saved[k] || {}) };
+  return { sides };
+}
 const STATUSES = new Set(['planned', 'confirmed', 'done', 'cancelled']);
 
 const json = (data, status = 200, headers = {}) =>
@@ -317,10 +328,28 @@ export function createHandler({ passcode = '', secret = '', secretPasscode = '',
 
       const store = createStore();
       if (seg[0] === 'calendar.ics' && method === 'GET') {
-        const [types, members, events] = await Promise.all([store.getTypes(), store.getMembers(), store.listDocs('events')]);
+        const [types, members, events, settings] = await Promise.all([store.getTypes(), store.getMembers(), store.listDocs('events'), getSettings(store)]);
         // Confidential events never go into calendar feeds (subscriptions cannot be unlocked per person).
-        const body = buildIcs(events.filter((e) => !e.confidential).map((e) => decorate(e, types, members)), url.searchParams.get('lang') === 'en' ? 'en' : 'ja');
+        const body = buildIcs(events.filter((e) => !e.confidential).map((e) => decorate(e, types, members)), url.searchParams.get('lang') === 'en' ? 'en' : 'ja', settings.sides);
         return new Response(body, { headers: { 'content-type': 'text/calendar; charset=utf-8', 'content-disposition': 'inline; filename="biogas-events.ics"' } });
+      }
+      if (seg[0] === 'settings' && seg.length === 1) {
+        if (method === 'GET') return json(await getSettings(store));
+        if (method === 'PUT') {
+          const b = await readJson(req); if (!b) return err('invalid_json', 400);
+          const cur = (await getSettings(store)).sides;
+          const sides = {};
+          for (const k of ['JP', 'IN']) {
+            const inp = (b.sides && b.sides[k]) || {};
+            sides[k] = {
+              label_ja: str(inp.label_ja).slice(0, 40) || cur[k].label_ja,
+              label_en: str(inp.label_en).slice(0, 40) || cur[k].label_en,
+              short: str(inp.short).slice(0, 6) || cur[k].short,
+            };
+          }
+          await store.putDoc('settings', 'sides', sides);
+          return json({ sides });
+        }
       }
       if (seg[0] === 'members' && seg.length <= 2) return memberHandlers(store, req, seg[1], url);
       if (seg[0] === 'types' && seg.length <= 2) return typeHandlers(store, req, seg[1], url);

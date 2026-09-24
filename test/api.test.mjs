@@ -150,7 +150,7 @@ test('ics feed lists non-cancelled events, also via function rewrite path', asyn
   assert.match(r.headers.get('content-type'), /text\/calendar/);
   assert.match(r.text, /SUMMARY:\[Management Meeting\] Visitor/);
   assert.doesNotMatch(r.text, /中止イベント/);
-  assert.match(r.text, /DESCRIPTION:Owner: India side/);
+  assert.match(r.text, /DESCRIPTION:Owner: India/);
   assert.match((await call('GET', '/calendar.ics')).text, /DESCRIPTION:主担当: インド側/);
   const viaFn = await call('GET', '/.netlify/functions/api/calendar.ics?lang=en');
   assert.equal(viaFn.status, 200); assert.match(viaFn.text, /BEGIN:VEVENT/);
@@ -242,4 +242,16 @@ test('confidential events are visible only with the confidential passcode', asyn
   const r = await h2(new Request('http://localhost/api/events', { headers: { cookie: both } }));
   assert.ok(!(await r.json()).some((e) => e.id === sec.body.id));
   assert.equal((await c('DELETE', `/api/events/${sec.body.id}`, null, { cookie: both })).status, 200);
+});
+
+test('side names are editable via settings', async () => {
+  const d = (await call('GET', '/api/settings')).body;
+  assert.equal(d.sides.JP.label_ja, '日本側'); assert.equal(d.sides.IN.short, 'IN');
+  const r = await call('PUT', '/api/settings', { sides: { JP: { label_ja: 'SMC', label_en: 'SMC (Japan)', short: 'SMC' }, IN: { label_ja: 'MSIL', label_en: 'Maruti Suzuki', short: 'MSILXXXX' } } });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.sides.JP.label_ja, 'SMC'); assert.equal(r.body.sides.IN.short, 'MSILXX'); // short is capped at 6 chars
+  assert.equal((await call('GET', '/api/settings')).body.sides.IN.label_en, 'Maruti Suzuki');
+  const partial = await call('PUT', '/api/settings', { sides: { JP: { label_ja: '' } } });
+  assert.equal(partial.body.sides.JP.label_ja, 'SMC'); // empty keeps the current value
+  await call('PUT', '/api/settings', { sides: { JP: { label_ja: '日本側', label_en: 'Japan', short: 'JP' }, IN: { label_ja: 'インド側', label_en: 'India', short: 'IN' } } });
 });

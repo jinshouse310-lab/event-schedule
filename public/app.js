@@ -11,6 +11,8 @@
     members: [],
     events: [],
     calMonth: null, // {y, m}
+    gantt: { start: null, span: 3 }, // start: {y, m}
+    settings: { sides: { JP: { label_ja: '日本側', label_en: 'Japan', short: 'JP' }, IN: { label_ja: 'インド側', label_en: 'India', short: 'IN' } } },
     editingEvent: null,
     config: { maxUploadMb: 50, authRequired: false },
   };
@@ -98,13 +100,15 @@
   const evTitle = (ev) => (state.lang === 'en' && ev.title_en ? ev.title_en : ev.title);
   const ownerName = (ev) => {
     if (ev.owner_id) return state.lang === 'en' && ev.owner_name_en ? ev.owner_name_en : ev.owner_name;
-    if (ev.owner_side) return t(ev.owner_side === 'JP' ? 'side_jp' : 'side_in');
+    if (ev.owner_side) return sideLabel(ev.owner_side);
     return t('unassigned');
   };
   const ownerHtml = (ev) => `${sideBadge(ev.owner_side)} <b>${esc(ownerName(ev))}</b>${ev.owner_dept ? ` <span class="dept">${esc(ev.owner_dept)}</span>` : ''}`;
   const memberLabel = (m) => memberName(m) + (m.dept ? ` · ${m.dept}` : '');
+  const sideLabel = (side) => { const x = state.settings.sides[side]; return x ? (state.lang === 'en' ? x.label_en : x.label_ja) : side; };
+  const sideShort = (side) => state.settings.sides[side]?.short || side;
   // Japan-side members are the majority, so only India-side members get a small tag.
-  const sideBadge = (side) => (side === 'IN' ? `<span class="side-badge IN">IN</span>` : '');
+  const sideBadge = (side) => (side === 'IN' ? `<span class="side-badge IN">${esc(sideShort('IN'))}</span>` : '');
   const fmtSize = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1048576).toFixed(1)} MB`);
   function toast(msg, isErr) {
     const el = $('#toast');
@@ -124,6 +128,7 @@
     document.documentElement.lang = state.lang;
     $$('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
     $$('[data-i18n-placeholder]').forEach((el) => { el.placeholder = t(el.dataset.i18nPlaceholder); });
+    $$('[data-side-label]').forEach((el) => { el.textContent = sideLabel(el.dataset.sideLabel); });
     $$('#langToggle button').forEach((b) => b.classList.toggle('active', b.dataset.lang === state.lang));
     $$('#tzToggle button').forEach((b) => b.classList.toggle('active', b.dataset.tz === state.tz));
     renderSecretButton();
@@ -138,25 +143,25 @@
     $('#formType').innerHTML = typeOpts;
     const keepMember = $('#fMember').value;
     const memberOpts = ['JP', 'IN'].map((side) =>
-      `<optgroup label="${esc(t(side === 'JP' ? 'side_jp' : 'side_in'))}">` +
+      `<optgroup label="${esc(sideLabel(side))}">` +
       state.members.filter((m) => m.side === side).map((m) => `<option value="${m.id}">${esc(memberName(m))}</option>`).join('') + '</optgroup>'
     ).join('');
     $('#fMember').innerHTML = `<option value="">${esc(t('all_members'))}</option>${memberOpts}`;
     $('#fMember').value = keepMember;
     const ownerOpts = ['JP', 'IN'].map((side) =>
-      `<optgroup label="${esc(t(side === 'JP' ? 'side_jp' : 'side_in'))}"><option value="side:${side}">${esc(t(side === 'JP' ? 'owner_side_jp' : 'owner_side_in'))}</option>` +
+      `<optgroup label="${esc(sideLabel(side))}"><option value="side:${side}">${esc(`${sideLabel(side)} (${t('person_tbd')})`)}</option>` +
       state.members.filter((m) => m.side === side).map((m) => `<option value="${m.id}">${esc(memberLabel(m))}</option>`).join('') + '</optgroup>'
     ).join('');
     $('#formOwner').innerHTML = `<option value="">${esc(t('unassigned'))}</option>${ownerOpts}`;
     $('#formMembers').innerHTML = ['JP', 'IN'].map((side) =>
-      `<div class="group">${esc(t(side === 'JP' ? 'side_jp' : 'side_in'))}</div>` +
+      `<div class="group">${esc(sideLabel(side))}</div>` +
       state.members.filter((m) => m.side === side).map((m) => `<label><input type="checkbox" name="member_ids" value="${m.id}" />${esc(memberName(m))}</label>`).join('')
     ).join('');
   }
 
   // ---------- load ----------
   async function loadMeta() {
-    [state.types, state.members, state.config] = await Promise.all([api('/api/types'), api('/api/members'), api('/api/config')]);
+    [state.types, state.members, state.config, state.settings] = await Promise.all([api('/api/types'), api('/api/members'), api('/api/config'), api('/api/settings')]);
     $('#logoutBox').hidden = false;
   }
   async function loadEvents() {
@@ -324,6 +329,9 @@
       all.map((x) => `<tr class="${x.active ? '' : 'inactive'}"><td><span class="color-dot" style="background:${x.color}"></span>${esc(x.label_ja)}</td><td>${esc(x.label_en)}</td><td>${x.sort_order}</td>
         <td><button class="btn small" data-edit-type="${x.id}">${esc(t('edit'))}</button></td></tr>`).join('');
     $('#typesTable')._all = all;
+    $('#sidesTable').innerHTML = `<tr><th>${esc(t('side_key'))}</th><th>${esc(t('label_ja'))}</th><th>${esc(t('label_en'))}</th><th>${esc(t('side_short'))}</th></tr>` +
+      ['JP', 'IN'].map((k) => { const x = state.settings.sides[k]; return `<tr><td>${k}</td>
+        <td><input name="${k}_label_ja" value="${esc(x.label_ja)}" required /></td><td><input name="${k}_label_en" value="${esc(x.label_en)}" /></td><td><input name="${k}_short" value="${esc(x.short)}" maxlength="6" /></td></tr>`; }).join('');
     const key = state.config.icsKey ? `key=${encodeURIComponent(state.config.icsKey)}` : '';
     $('#icsUrlJa').textContent = `${location.origin}/calendar.ics?${key}`;
     $('#icsUrlEn').textContent = `${location.origin}/calendar.ics?${key}&lang=en`;
@@ -522,7 +530,7 @@
       if (editingType) await api(`/api/types/${editingType.id}`, { method: 'PUT', body: json(body) });
       else await api('/api/types', { method: 'POST', body: json(body) });
       $('#typeModal').hidden = true; toast(t('saved'));
-      await loadMeta(); fillSelects(); renderSettings();
+      await refreshAll(); if (state.view === 'settings') renderSettings();
     } catch (err) { toast(errMsg(err), true); }
   }
 
@@ -549,6 +557,117 @@
     } catch (err) { toast(errMsg(err), true); }
   }
 
+  // ---------- gantt / timeline view ----------
+  const DAY_MS = 86400000;
+  const keyToUtc = (k) => Date.parse(k + 'T00:00:00Z');
+  function eventDayRange(ev) {
+    const s = ev.all_day ? ev.start_at.slice(0, 10) : eventDayKey(ev, state.tz);
+    const e = ev.all_day ? (ev.end_at || ev.start_at).slice(0, 10) : ev.end_at ? dateKey(zonedParts(new Date(ev.end_at), state.tz)) : s;
+    return { s, e: e < s ? s : e };
+  }
+  function ganttWindow() {
+    if (!state.gantt.start) { const p = zonedParts(new Date(), state.tz); state.gantt.start = { y: p.y, m: p.m }; }
+    const { y, m } = state.gantt.start;
+    const span = state.gantt.span;
+    const startKey = `${y}-${pad(m)}-01`;
+    const endKey = new Date(Date.UTC(y, m - 1 + span, 0)).toISOString().slice(0, 10); // last day of the last month
+    const days = Math.round((keyToUtc(endKey) - keyToUtc(startKey)) / DAY_MS) + 1;
+    return { startKey, endKey, days, y, m, span };
+  }
+  function renderGantt() {
+    const w = ganttWindow();
+    const dw = { 1: 34, 3: 20, 6: 12 }[w.span] || 20;
+    const endMonth = new Date(Date.UTC(w.y, w.m - 1 + w.span - 1, 1));
+    $('#ganttTitle').textContent = w.span === 1 ? t('month_fmt')(w.y, w.m) : `${t('month_fmt')(w.y, w.m)} – ${t('month_fmt')(endMonth.getUTCFullYear(), endMonth.getUTCMonth() + 1)}`;
+    $('#ganttSpan').value = String(w.span);
+    const todayKey = dateKey(zonedParts(new Date(), state.tz));
+    const todayIdx = Math.round((keyToUtc(todayKey) - keyToUtc(w.startKey)) / DAY_MS);
+    const months = [], daysHtml = [];
+    for (let i = 0; i < w.days; i++) {
+      const d = new Date(keyToUtc(w.startKey) + i * DAY_MS);
+      const k = d.toISOString().slice(0, 10);
+      const dow = d.getUTCDay();
+      if (d.getUTCDate() === 1 || i === 0) months.push({ y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, count: 0 });
+      months[months.length - 1].count++;
+      daysHtml.push(`<div class="g-day ${dow === 0 ? 'sun' : dow === 6 ? 'sat' : ''} ${k === todayKey ? 'today' : ''}">${w.span === 6 ? (d.getUTCDate() % 5 === 1 ? d.getUTCDate() : '') : d.getUTCDate()}</div>`);
+    }
+    const todayOverlay = todayIdx >= 0 && todayIdx < w.days ? `<div class="g-today" style="left:${todayIdx * dw}px"></div>` : '';
+    const inWindow = state.events.filter((ev) => { const r = eventDayRange(ev); return r.e >= w.startKey && r.s <= w.endKey; });
+    const groups = state.types.map((ty) => ({ ty, evs: inWindow.filter((ev) => ev.type_id === ty.id).sort((a, b) => a.start_at.localeCompare(b.start_at)) })).filter((g) => g.evs.length);
+    const otherEvs = inWindow.filter((ev) => !state.types.some((ty) => ty.id === ev.type_id));
+    if (otherEvs.length) groups.push({ ty: { id: '', label_ja: 'その他', label_en: 'Other', color: '#5d6d7e' }, evs: otherEvs });
+    const rows = groups.map((g) => `
+      <div class="g-group"><div class="g-label"><span class="color-dot" style="background:${g.ty.color}"></span>${esc(typeLabel(g.ty))}${g.ty.id ? `<button type="button" class="btn small" data-edit-type="${g.ty.id}" title="${esc(t('edit_type'))}">✎</button>` : ''}</div><div class="g-track">${todayOverlay}</div></div>
+      ${g.evs.map((ev) => {
+        const r = eventDayRange(ev);
+        const sIdx = Math.max(0, Math.round((keyToUtc(r.s) - keyToUtc(w.startKey)) / DAY_MS));
+        const eIdx = Math.min(w.days - 1, Math.round((keyToUtc(r.e) - keyToUtc(w.startKey)) / DAY_MS));
+        const label = `${ev.confidential ? '🔒 ' : ''}${esc(evTitle(ev))}`;
+        const width = (eIdx - sIdx + 1) * dw - 3;
+        const narrow = width < 90; // short bars: show the title next to the bar instead of inside it
+        return `<div class="g-row"><div class="g-label" data-id="${ev.id}" title="${esc(evTitle(ev))}">${label}<span class="alt" style="margin-left:auto;font-size:.72rem">${esc(ownerName(ev))}</span></div>
+          <div class="g-track">${todayOverlay}<div class="g-bar ${ev.status} ${narrow ? 'narrow' : ''}" data-id="${ev.id}" style="left:${sIdx * dw + 1}px;width:${width}px;background:${ev.type_color}" title="${esc(evTitle(ev))} ${esc(fmtRangeDates(ev))}">${narrow ? '' : label}<span class="g-handle"></span></div>${narrow ? `<span class="g-bar-label" data-id="${ev.id}" style="left:${sIdx * dw + width + 6}px">${label}</span>` : ''}</div></div>`;
+      }).join('')}`).join('');
+    $('#gantt').innerHTML = `<div class="gantt-inner" style="--dw:${dw}px">
+      <div class="g-head"><div class="g-label"></div><div class="g-months">${months.map((mo) => `<div class="g-month" style="width:${mo.count * dw}px">${esc(t('month_fmt')(mo.y, mo.m))}</div>`).join('')}</div></div>
+      <div class="g-head2"><div class="g-label"></div><div class="g-days">${daysHtml.join('')}</div></div>
+      ${rows || `<div class="g-empty">${esc(t('no_events_range'))}</div>`}
+    </div>`;
+    $('#gantt')._dw = dw;
+  }
+  // Drag to move (whole bar) or resize (right handle); a click without movement opens the editor.
+  function wireGanttDrag() {
+    const root = $('#gantt');
+    let drag = null;
+    root.addEventListener('pointerdown', (e) => {
+      const bar = e.target.closest('.g-bar'); if (!bar || e.button !== 0) return;
+      const ev = state.events.find((x) => x.id === bar.dataset.id); if (!ev) return;
+      drag = { bar, ev, x0: e.clientX, left0: parseFloat(bar.style.left), width0: parseFloat(bar.style.width), resize: Boolean(e.target.closest('.g-handle')), dw: root._dw, delta: 0 };
+      bar.setPointerCapture(e.pointerId);
+      bar.classList.add('dragging');
+    });
+    root.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      drag.delta = Math.round((e.clientX - drag.x0) / drag.dw);
+      if (drag.resize) drag.bar.style.width = `${Math.max(drag.dw - 3, drag.width0 + drag.delta * drag.dw)}px`;
+      else drag.bar.style.left = `${drag.left0 + drag.delta * drag.dw}px`;
+    });
+    const finish = async (e) => {
+      if (!drag) return;
+      const d = drag; drag = null;
+      d.bar.classList.remove('dragging');
+      try { d.bar.releasePointerCapture(e.pointerId); } catch {}
+      if (d.delta === 0) { openEvent(d.ev.id); return; } // a plain click (even on the handle) opens the editor
+      const ev = d.ev;
+      const body = {};
+      if (d.resize) {
+        const r = eventDayRange(ev);
+        const lenDays = Math.max(0, Math.round((keyToUtc(r.e) - keyToUtc(r.s)) / DAY_MS) + d.delta);
+        if (ev.all_day) body.end_at = new Date(keyToUtc(ev.start_at.slice(0, 10)) + lenDays * DAY_MS).toISOString();
+        else {
+          const base = ev.end_at ? Date.parse(ev.end_at) : Date.parse(ev.start_at) + 3600e3;
+          let end = base + d.delta * DAY_MS;
+          if (end <= Date.parse(ev.start_at)) end = Date.parse(ev.start_at) + 3600e3;
+          body.end_at = new Date(end).toISOString();
+        }
+      } else {
+        body.start_at = new Date(Date.parse(ev.start_at) + d.delta * DAY_MS).toISOString();
+        if (ev.end_at) body.end_at = new Date(Date.parse(ev.end_at) + d.delta * DAY_MS).toISOString();
+      }
+      try { await api(`/api/events/${ev.id}`, { method: 'PUT', body: json(body) }); toast(t('gantt_moved')); }
+      catch (err) { toast(errMsg(err), true); }
+      await refreshAll(false);
+    };
+    root.addEventListener('pointerup', finish);
+    root.addEventListener('pointercancel', finish);
+    root.addEventListener('click', (e) => {
+      if (e.target.closest('.g-bar')) return;
+      const tb = e.target.closest('[data-edit-type]');
+      if (tb) { const ty = state.types.find((x) => x.id === tb.dataset.editType); if (ty) openTypeForm(ty); return; }
+      const lb = e.target.closest('.g-label[data-id], .g-bar-label[data-id]'); if (lb) openEvent(lb.dataset.id);
+    });
+  }
+
   // ---------- view switching ----------
   async function showView(view) {
     state.view = view;
@@ -556,6 +675,7 @@
     $$('.view').forEach((s) => (s.hidden = s.id !== `view-${view}`));
     if (view === 'list') renderList();
     if (view === 'calendar') renderCalendar();
+    if (view === 'gantt') renderGantt();
     if (view === 'members') await renderMembers();
     if (view === 'settings') await renderSettings();
   }
@@ -564,6 +684,7 @@
     await loadEvents();
     if (state.view === 'list') renderList();
     if (state.view === 'calendar') renderCalendar();
+    if (state.view === 'gantt') renderGantt();
   }
 
   // ---------- events wiring ----------
@@ -590,6 +711,20 @@
     $('#calPrev').addEventListener('click', () => { const c = state.calMonth; state.calMonth = c.m === 1 ? { y: c.y - 1, m: 12 } : { y: c.y, m: c.m - 1 }; renderCalendar(); });
     $('#calNext').addEventListener('click', () => { const c = state.calMonth; state.calMonth = c.m === 12 ? { y: c.y + 1, m: 1 } : { y: c.y, m: c.m + 1 }; renderCalendar(); });
     $('#calToday').addEventListener('click', () => { state.calMonth = null; renderCalendar(); });
+    const shiftGantt = (n) => { const w = ganttWindow(); const d = new Date(Date.UTC(w.y, w.m - 1 + n, 1)); state.gantt.start = { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1 }; renderGantt(); };
+    $('#ganttPrev').addEventListener('click', () => shiftGantt(-1));
+    $('#ganttNext').addEventListener('click', () => shiftGantt(1));
+    $('#ganttToday').addEventListener('click', () => { state.gantt.start = null; renderGantt(); });
+    $('#ganttSpan').addEventListener('change', (e) => { state.gantt.span = Number(e.target.value); renderGantt(); });
+    wireGanttDrag();
+    $('#sidesForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = e.target;
+      const sides = {};
+      for (const k of ['JP', 'IN']) sides[k] = { label_ja: f[`${k}_label_ja`].value, label_en: f[`${k}_label_en`].value, short: f[`${k}_short`].value };
+      try { state.settings = await api('/api/settings', { method: 'PUT', body: json({ sides }) }); applyI18n(); toast(t('saved')); }
+      catch (err) { toast(errMsg(err), true); }
+    });
 
     // modals: close buttons + backdrop
     $$('.modal').forEach((m) => {
