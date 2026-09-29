@@ -8,7 +8,8 @@
     "start": "node server.mjs",
     "dev": "node --watch server.mjs",
     "test": "node --test \"test/**/*.test.mjs\"",
-    "netlify:dev": "netlify dev"
+    "netlify:dev": "netlify dev",
+    "migrate:sharepoint": "node scripts/migrate-blobs-to-sharepoint.mjs"
   },
   "engines": {
     "node": ">=20"

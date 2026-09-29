@@ -1,5 +1,6 @@
 import { getStore } from '@netlify/blobs';
 import { randomBytes } from 'node:crypto';
+import { createSharePointStore, sharePointConfigFromEnv } from './store-sharepoint.mjs';
 
 export const DEFAULT_TYPES = [
   ['management', '経営会議', 'Management Meeting', '#c0392b', 10],
@@ -20,7 +21,40 @@ export const nowIso = () => new Date().toISOString();
  * On Netlify the stores are configured automatically; locally `server.mjs`
  * points the client at a file-backed BlobsServer.
  */
+// Adds the shared helpers (seeded types, sorted members) on top of a raw document store.
+function withCommon(base) {
+  async function getTypes() {
+    let types = await base.listDocs('types');
+    if (!types.length) {
+      types = DEFAULT_TYPES.map(([key, label_ja, label_en, color, sort_order]) => ({
+        id: key, key, label_ja, label_en, color, sort_order, active: 1,
+      }));
+      await Promise.all(types.map((t) => base.putDoc('types', t.id, t)));
+    }
+    return types.sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
+  }
+  async function getMembers() {
+    const m = await base.listDocs('members');
+    return m.sort((a, b) => a.side.localeCompare(b.side) || a.name.localeCompare(b.name, 'ja'));
+  }
+  return { ...base, getTypes, getMembers };
+}
+
+let sharePointSingleton = null;
+/**
+ * Storage backend is chosen by STORAGE: "sharepoint" (Microsoft 365, see docs/sharepoint-setup.md)
+ * or Netlify Blobs (default).
+ */
 export function createStore() {
+  if ((process.env.STORAGE || '').toLowerCase() === 'sharepoint') {
+    if (!sharePointSingleton) sharePointSingleton = withCommon(createSharePointStore(sharePointConfigFromEnv()));
+    return sharePointSingleton;
+  }
+  return withCommon(createBlobsStore());
+}
+export function resetStoreCache() { sharePointSingleton = null; }
+
+function createBlobsStore() {
   const opts = { consistency: 'strong' };
   const stores = {
     members: getStore({ name: 'members', ...opts }),
@@ -44,23 +78,8 @@ export function createStore() {
   const putDoc = async (name, key, doc) => { await stores[name].setJSON(key, doc); return doc; };
   const delDoc = (name, key) => stores[name].delete(key);
 
-  async function getTypes() {
-    let types = await listDocs('types');
-    if (!types.length) {
-      types = DEFAULT_TYPES.map(([key, label_ja, label_en, color, sort_order]) => ({
-        id: key, key, label_ja, label_en, color, sort_order, active: 1,
-      }));
-      await Promise.all(types.map((t) => putDoc('types', t.id, t)));
-    }
-    return types.sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
-  }
-  async function getMembers() {
-    const m = await listDocs('members');
-    return m.sort((a, b) => a.side.localeCompare(b.side) || a.name.localeCompare(b.name, 'ja'));
-  }
-
   return {
-    listKeys, listDocs, getDoc, putDoc, delDoc, getTypes, getMembers,
+    listKeys, listDocs, getDoc, putDoc, delDoc, kind: 'blobs',
     putFile: (key, data, metadata) => stores.files.set(key, data, { metadata }),
     getFile: (key) => stores.files.getWithMetadata(key, { type: 'arrayBuffer' }),
     delFile: (key) => stores.files.delete(key),

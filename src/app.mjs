@@ -306,7 +306,8 @@ export function createHandler({ passcode = '', secret = '', secretPasscode = '',
       if (seg[0] === 'auth' && method === 'GET') return json({ required: true, configured, authed: hasCookie(req), secretConfigured, secretUnlocked: hasSecret(req) });
       if (seg[0] === 'config' && method === 'GET') {
         const authed = hasCookie(req);
-        return json({ maxUploadMb, authRequired: true, configured, authed, icsKey: authed ? icsKey : undefined, secretConfigured, secretUnlocked: authed && hasSecret(req), disabled });
+        const storage = (process.env.STORAGE || '').toLowerCase() === 'sharepoint' ? 'sharepoint' : 'blobs';
+        return json({ maxUploadMb, authRequired: true, configured, authed, icsKey: authed ? icsKey : undefined, secretConfigured, secretUnlocked: authed && hasSecret(req), disabled, storage, storageSite: storage === 'sharepoint' && authed ? process.env.SP_SITE_URL || '' : undefined });
       }
       if (!configured) return err('passcode_not_configured', 503);
       if (seg[0] === 'login' && method === 'POST') {
@@ -335,6 +336,13 @@ export function createHandler({ passcode = '', secret = '', secretPasscode = '',
         // Confidential events never go into calendar feeds (subscriptions cannot be unlocked per person).
         const body = buildIcs(events.filter((e) => !e.confidential).map((e) => decorate(e, types, members)), url.searchParams.get('lang') === 'en' ? 'en' : 'ja', settings.sides);
         return new Response(body, { headers: { 'content-type': 'text/calendar; charset=utf-8', 'content-disposition': 'inline; filename="biogas-events.ics"' } });
+      }
+      if (seg[0] === 'storage-check' && method === 'GET') {
+        try {
+          const info = typeof store.ensure === 'function' ? await store.ensure() : null;
+          const types = await store.getTypes();
+          return json({ ok: true, kind: store.kind, lists: info ? Object.keys(info.lists) : [], types: types.length });
+        } catch (e) { return json({ ok: false, kind: store.kind, error: String(e.message || e) }, 502); }
       }
       if (seg[0] === 'settings' && seg.length === 1) {
         if (method === 'GET') return json(await getSettings(store));

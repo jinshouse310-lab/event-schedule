@@ -47,6 +47,17 @@
 - **カレンダー購読 URL**: 設定画面に表示される URL には `key=...` が付いており、これがパスコードの代わりになります。Outlook / Google カレンダーに登録できますが、メンバー以外に共有しないでください。
 - **バックアップ**: Netlify CLI で `netlify blobs:list events` などで確認・取得できます（`netlify link` でサイトに接続後）。
 
+## データ保存先を SharePoint (Microsoft 365) にする
+
+環境変数 `STORAGE=sharepoint` と Microsoft Graph の接続情報を設定すると、イベント・メンバー・資料をすべて社内の SharePoint サイト（リストとドキュメントライブラリ）に保存します。情シスへの依頼文、Netlify の設定、既存データの移行手順は **[docs/sharepoint-setup.md](docs/sharepoint-setup.md)** を参照してください。
+
+| 変数 | 説明 |
+| --- | --- |
+| `STORAGE` | `sharepoint` で SharePoint 保存に切替（未設定は Netlify Blobs） |
+| `MS_TENANT_ID` / `MS_CLIENT_ID` / `MS_CLIENT_SECRET` | Entra ID アプリ登録（Graph `Sites.Selected`） |
+| `SP_SITE_URL` | 保存先の SharePoint サイト URL |
+| `SP_LIST_PREFIX` / `SP_LIBRARY` | 任意。リスト名の接頭辞（既定 `Biogas`）と資料ライブラリ名（既定 `EventMaterials`） |
+
 ## ローカルで動かす / 自前サーバーで動かす
 
 Node.js 20 以上が必要です。Netlify のストレージと同じ API を持つファイルベースのサーバーを内蔵しているので、Netlify なしでも動きます。
@@ -83,7 +94,10 @@ npm test       # API テスト (node:test)
 netlify.toml               Netlify の設定 (publish, functions, リダイレクト)
 netlify/functions/api.mjs  Netlify Function (/api/*, /calendar.ics)
 src/app.mjs                ルーティング・認証・イベント/メンバー/資料の処理 (fetch 互換ハンドラ)
-src/store.mjs              Netlify Blobs 上のドキュメントストア
+src/store.mjs              保存先の切替 (Netlify Blobs / SharePoint)
+src/store-sharepoint.mjs   SharePoint (Microsoft Graph) 保存アダプター
+scripts/                   データ移行スクリプト
+docs/sharepoint-setup.md   SharePoint 連携の手順書
 src/ics.mjs                iCalendar 生成
 server.mjs                 ローカル / 自前サーバー用 (同じハンドラをローカル Blobs サーバーで実行)
 public/                    フロントエンド (依存なしの HTML / CSS / JS)

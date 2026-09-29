@@ -340,6 +340,8 @@
       ['JP', 'IN'].map((k) => { const x = state.settings.sides[k]; return `<tr><td>${k}</td>
         <td><input name="${k}_label_ja" value="${esc(x.label_ja)}" required /></td><td><input name="${k}_label_en" value="${esc(x.label_en)}" /></td><td><input name="${k}_short" value="${esc(x.short)}" maxlength="6" /></td></tr>`; }).join('');
     const key = state.config.icsKey ? `key=${encodeURIComponent(state.config.icsKey)}` : '';
+    $('#storageInfo').textContent = state.config.storage === 'sharepoint' ? `${t('storage_sharepoint')} — ${state.config.storageSite || ''}` : t('storage_blobs');
+    $('#storageResult').textContent = '';
     $('#icsUrlJa').textContent = `${location.origin}/calendar.ics?${key}`;
     $('#icsUrlEn').textContent = `${location.origin}/calendar.ics?${key}&lang=en`;
   }
@@ -797,6 +799,11 @@
       if (!confirm(t('confirm_deactivate'))) return;
       await api(`/api/types/${editingType.id}`, { method: 'DELETE' });
       $('#typeModal').hidden = true; toast(t('saved')); await loadMeta(); fillSelects(); renderSettings();
+    });
+    $('#btnStorageCheck').addEventListener('click', async () => {
+      const out = $('#storageResult'); out.textContent = t('checking');
+      try { const r = await api('/api/storage-check'); out.textContent = t('storage_ok', { lists: r.lists.join(', ') || '-', n: r.types }); }
+      catch (err) { out.textContent = t('storage_ng', { err: err.data?.error || err.message }); }
     });
     $('#btnLogout').addEventListener('click', async () => { await api('/api/logout', { method: 'POST' }); location.href = '/login'; });
   }
