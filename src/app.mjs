@@ -38,7 +38,10 @@ const safeEq = (a, b) => { const x = Buffer.from(a), y = Buffer.from(b); return 
  * Creates a fetch-style handler `(Request) => Promise<Response>` used by both the
  * Netlify Function and the local dev server.
  */
-export function createHandler({ passcode = '', secret = '', secretPasscode = '', maxUploadMb = 4 } = {}) {
+const KNOWN_FEATURES = ['gantt', 'sides', 'calendar', 'copy'];
+export function createHandler({ passcode = '', secret = '', secretPasscode = '', maxUploadMb = 4, disabledFeatures = '' } = {}) {
+  // Feature flags: DISABLED_FEATURES="gantt,sides" hides those parts of the UI without a code change.
+  const disabled = String(disabledFeatures).split(',').map((x) => x.trim().toLowerCase()).filter((x) => KNOWN_FEATURES.includes(x));
   // Access is always passcode-protected. Without APP_PASSCODE the app refuses to serve data
   // instead of silently becoming public.
   const configured = Boolean(passcode);
@@ -303,7 +306,7 @@ export function createHandler({ passcode = '', secret = '', secretPasscode = '',
       if (seg[0] === 'auth' && method === 'GET') return json({ required: true, configured, authed: hasCookie(req), secretConfigured, secretUnlocked: hasSecret(req) });
       if (seg[0] === 'config' && method === 'GET') {
         const authed = hasCookie(req);
-        return json({ maxUploadMb, authRequired: true, configured, authed, icsKey: authed ? icsKey : undefined, secretConfigured, secretUnlocked: authed && hasSecret(req) });
+        return json({ maxUploadMb, authRequired: true, configured, authed, icsKey: authed ? icsKey : undefined, secretConfigured, secretUnlocked: authed && hasSecret(req), disabled });
       }
       if (!configured) return err('passcode_not_configured', 503);
       if (seg[0] === 'login' && method === 'POST') {

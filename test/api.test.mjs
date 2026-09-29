@@ -255,3 +255,11 @@ test('side names are editable via settings', async () => {
   assert.equal(partial.body.sides.JP.label_ja, 'SMC'); // empty keeps the current value
   await call('PUT', '/api/settings', { sides: { JP: { label_ja: '日本側', label_en: 'Japan', short: 'JP' }, IN: { label_ja: 'インド側', label_en: 'India', short: 'IN' } } });
 });
+
+test('DISABLED_FEATURES is exposed through config', async () => {
+  const h = createHandler({ passcode: 'x', disabledFeatures: 'gantt, Sides,unknown' });
+  const cfg = await (await h(new Request('http://localhost/api/config'))).json();
+  assert.deepEqual(cfg.disabled, ['gantt', 'sides']);
+  const none = await (await createHandler({ passcode: 'x' })(new Request('http://localhost/api/config'))).json();
+  assert.deepEqual(none.disabled, []);
+});

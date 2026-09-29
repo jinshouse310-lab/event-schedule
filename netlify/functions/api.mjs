@@ -4,6 +4,7 @@ const handler = createHandler({
   passcode: process.env.APP_PASSCODE || '',
   secret: process.env.SESSION_SECRET || '',
   secretPasscode: process.env.SECRET_PASSCODE || '',
+  disabledFeatures: process.env.DISABLED_FEATURES || '',
   maxUploadMb: process.env.MAX_UPLOAD_MB || 4,
 });
 

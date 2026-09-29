@@ -160,8 +160,15 @@
   }
 
   // ---------- load ----------
+  const featureOff = (name) => (state.config.disabled || []).includes(name);
+  function applyFeatureFlags() {
+    $$('.tab').forEach((b) => { b.hidden = featureOff(b.dataset.view); });
+    $('#sidesSection').hidden = featureOff('sides');
+    if (featureOff(state.view)) showView('list');
+  }
   async function loadMeta() {
     [state.types, state.members, state.config, state.settings] = await Promise.all([api('/api/types'), api('/api/members'), api('/api/config'), api('/api/settings')]);
+    applyFeatureFlags();
     $('#logoutBox').hidden = false;
   }
   async function loadEvents() {
@@ -258,7 +265,7 @@
         </div>
         <div class="ev-right">
           <div class="card-actions">
-            <button class="btn small edit-btn" data-copy="${ev.id}" title="${esc(t('copy'))}">⧉ ${esc(t('copy'))}</button>
+            ${featureOff('copy') ? '' : `<button class="btn small edit-btn" data-copy="${ev.id}" title="${esc(t('copy'))}">⧉ ${esc(t('copy'))}</button>`}
             <button class="btn small edit-btn" data-edit="${ev.id}" title="${esc(t('edit'))}">✎ ${esc(t('edit'))}</button>
           </div>
         </div>
@@ -430,7 +437,7 @@
     $('#materialsPanel').hidden = !existing;
     $('#editLayout').classList.toggle('single', !existing);
     $('#btnDeleteEvent').hidden = !existing;
-    $('#btnCopyEvent').hidden = !existing;
+    $('#btnCopyEvent').hidden = !existing || featureOff('copy');
     if (existing) {
       renderMaterials(state.editingEvent.materials || []);
       $('#uploadHint').textContent = `${t('upload_hint')} (≤ ${state.config.maxUploadMb} MB)`;
